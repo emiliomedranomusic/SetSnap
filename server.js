@@ -12,7 +12,50 @@ const crypto = require('crypto');
 const { parseSetlist } = require('./lib/parseSetlist');
 const { searchSpotifyWithScores, getStatus } = require('./lib/spotifySearch');
 const { extractSetlistFromImage } = require('./lib/geminiSetlist');
+const JobQueue = require('./lib/jobQueue');
 const multer = require('multer');
+
+const geminiQueue = new JobQueue(2); // Máximo 2 ejecuciones a la vez
+
+// --- Rate Limiting y Caché (Gemini) ---
+const userRateLimits = new Map();
+const ipRateLimits = new Map();
+let globalDailyCount = { count: 0, date: new Date().toISOString().split('T')[0] };
+
+const MAX_USER_PER_DAY = 12;
+const MAX_IP_PER_DAY = 30;
+const MAX_GLOBAL_PER_DAY = 200;
+
+function checkRateLimits(req) {
+    const today = new Date().toISOString().split('T')[0];
+    const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    const sessionId = req.sessionID;
+
+    if (globalDailyCount.date !== today) { globalDailyCount = { count: 0, date: today }; }
+    if (globalDailyCount.count >= MAX_GLOBAL_PER_DAY) { throw new Error('OCR en mantenimiento temporal (Límite global diario alcanzado). Intenta mañana.'); }
+
+    let ipData = ipRateLimits.get(ip);
+    if (!ipData || ipData.date !== today) ipData = { count: 0, date: today };
+    if (ipData.count >= MAX_IP_PER_DAY) throw new Error('Límite de procesamiento por IP excedido (30/día).');
+
+    let userData = userRateLimits.get(sessionId);
+    if (!userData || userData.date !== today) userData = { count: 0, date: today };
+    if (userData.count >= MAX_USER_PER_DAY) throw new Error('Límite de imágenes por usuario excedido (12/día).');
+
+    return { ip, sessionId, ipData, userData };
+}
+
+function commitRateLimits(limits) {
+    if (!limits) return;
+    limits.ipData.count++;
+    limits.userData.count++;
+    globalDailyCount.count++;
+    ipRateLimits.set(limits.ip, limits.ipData);
+    userRateLimits.set(limits.sessionId, limits.userData);
+}
+
+const imageCacheHash = new Map(); // Para no re-evaluar la misma imagen
+
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -127,6 +170,11 @@ app.post('/api/parse-setlist', (req, res) => {
 
 // --- Extraer setlist desde imagen (Gemini) ---
 app.post('/api/extract-setlist-from-image', upload.single('image'), async (req, res) => {
+    // 1. Capa de Seguridad Básica (Debe tener sesión conectada para subir)
+    if (!req.session.spotifyAccessToken) {
+        return res.status(401).json({ success: false, message: 'Inicia sesión en Spotify primero.' });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         return res.status(503).json({ success: false, message: 'Gemini API no configurada (GEMINI_API_KEY).' });
@@ -134,12 +182,34 @@ app.post('/api/extract-setlist-from-image', upload.single('image'), async (req, 
     if (!req.file || !req.file.buffer) {
         return res.status(400).json({ success: false, message: 'Se requiere un archivo de imagen (campo: image).' });
     }
+
+    // 2. Hash Cache Check (Si ha sido subida antes, la saltamos)
+    const hash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
+    if (imageCacheHash.has(hash)) {
+        console.log(`[Cache HIT] Imagen conocida ${hash.substring(0, 8)}... Evitando llamada a Gemini.`);
+        return res.json({ success: true, items: imageCacheHash.get(hash) });
+    }
+
+    // 3. Revisamos Cuotas (Límites por usuario/IP)
+    let limits;
+    try {
+        limits = checkRateLimits(req);
+    } catch (e) {
+        return res.status(429).json({ success: false, message: e.message });
+    }
+
     const mimeType = req.file.mimetype || 'image/png';
     try {
-        const result = await extractSetlistFromImage(req.file.buffer, mimeType, apiKey);
+        // Ejecutamos la tarea encolada con retries automáticos en backoff
+        const result = await geminiQueue.add(() => extractSetlistFromImage(req.file.buffer, mimeType, apiKey));
+
+        // Finalizado, registramos que el usuario consumió de la capa y cacheamos la respuesta
+        commitRateLimits(limits);
+        imageCacheHash.set(hash, result.items);
+
         res.json({ success: true, items: result.items });
     } catch (err) {
-        console.error('Error extractSetlistFromImage:', err.message);
+        console.error('Error procesando imagen gemini:', err.message);
         const status = err.message && err.message.includes('JSON') ? 422 : 500;
         res.status(status).json({ success: false, message: err.message || 'Error al procesar la imagen.' });
     }
