@@ -1,6 +1,6 @@
 {
-    "name": "Setlist to Spotify",
-    "short_name": "Setlist",
+    "name": "SetSnap",
+    "short_name": "SetSnap",
     "description": "Convierte tus Setlists en Playlists de Spotify automáticamente",
     "start_url": "/",
     "display": "standalone",

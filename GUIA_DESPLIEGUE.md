@@ -1,6 +1,6 @@
 # 🚀 Cómo publicar tu aplicación para que todos puedan usarla
 
-Actualmente, "Setlist to Spotify" funciona solo en tu computadora (`localhost`). Si quieres compartir un enlace con tus amigos y que lo usen desde su celular (incluso instalándolo como App o PWA), debes subirlo a un servidor en la nube.
+Actualmente, "SetSnap" funciona solo en tu computadora (`localhost`). Si quieres compartir un enlace con tus amigos y que lo usen desde su celular (incluso instalándolo como App o PWA), debes subirlo a un servidor en la nube.
 
 Aquí tienes la guía más sencilla usando **Render.com** (Es gratis y excelente para proyectos en Node.js).
 
