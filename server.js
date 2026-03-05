@@ -55,18 +55,25 @@ const spotifyScopes = ['playlist-modify-public', 'playlist-modify-private'];
 // --- Funciones Auxiliares ---
 
 // Spotify: Refrescar token
-async function refreshSpotifyToken(req) { /* ... (código sin cambios) ... */
-    console.log('Intentando refrescar token de Spotify...');
-    if (!req.session.spotifyRefreshToken) { console.error('Token expirado, pero no hay refresh token!'); throw new Error('Token expirado y no se pudo refrescar.'); }
+async function refreshSpotifyToken(req) {
+    if (!req.session.spotifyRefreshToken) { throw new Error('Token expirado y no se pudo refrescar.'); }
     try {
-        console.log('Usando refresh token:', req.session.spotifyRefreshToken.substring(0, 10) + '...');
-        spotifyApi.setRefreshToken(req.session.spotifyRefreshToken);
-        const data = await spotifyApi.refreshAccessToken(); console.log('Respuesta del refresh:', data.body);
-        req.session.spotifyAccessToken = data.body['access_token']; req.session.spotifyExpiresAt = Date.now() + (data.body['expires_in'] * 1000);
-        if (data.body['refresh_token']) { req.session.spotifyRefreshToken = data.body['refresh_token']; console.log('Nuevo refresh token Spotify guardado.'); }
-        console.log('Token Spotify refrescado! Nuevo access:', req.session.spotifyAccessToken.substring(0, 10) + '...');
-        spotifyApi.setAccessToken(req.session.spotifyAccessToken); return true;
-    } catch (refreshError) { console.error('ERROR refrescando token Spotify:', refreshError.body || refreshError.message); delete req.session.spotifyAccessToken; delete req.session.spotifyRefreshToken; delete req.session.spotifyExpiresAt; throw new Error('Error refrescando token Spotify.'); }
+        const tempApi = new SpotifyWebApi({
+            clientId: process.env.SPOTIFY_CLIENT_ID,
+            clientSecret: process.env.SPOTIFY_CLIENT_SECRET
+        });
+        tempApi.setRefreshToken(req.session.spotifyRefreshToken);
+        const data = await tempApi.refreshAccessToken();
+        req.session.spotifyAccessToken = data.body['access_token'];
+        req.session.spotifyExpiresAt = Date.now() + (data.body['expires_in'] * 1000);
+        if (data.body['refresh_token']) { req.session.spotifyRefreshToken = data.body['refresh_token']; }
+        return true;
+    } catch (refreshError) {
+        delete req.session.spotifyAccessToken;
+        delete req.session.spotifyRefreshToken;
+        delete req.session.spotifyExpiresAt;
+        throw new Error('Error refrescando token Spotify.');
+    }
 }
 
 // Spotify: Buscar Canciones
@@ -104,8 +111,10 @@ app.get('/callback/spotify', async (req, res) => { /* ... (código sin cambios) 
 
 // --- Estado de sesión Spotify (para que el frontend muestre "Conectado") ---
 app.get('/api/spotify-status', (req, res) => {
-    console.log('spotify-status: sessionID', req.sessionID, 'spotifyAccessToken', req.session.spotifyAccessToken ? 'SET' : 'UNSET');
-    res.json({ loggedIn: Boolean(req.session && req.session.spotifyAccessToken) });
+    res.json({
+        loggedIn: Boolean(req.session && req.session.spotifyAccessToken),
+        token: req.session.spotifyAccessToken || null
+    });
 });
 
 // --- Parse setlist (sin auth) ---
@@ -135,7 +144,38 @@ app.post('/api/extract-setlist-from-image', upload.single('image'), async (req, 
     }
 });
 
-// --- Búsqueda Spotify con scoring (requiere auth) ---
+// --- Búsqueda delegada al cliente (Bypass IP ban 403) ---
+app.post('/api/search-spotify-client-passthrough', async (req, res) => {
+    // Solo valida que haya login, y le entrega la lista e info para que el celular busque localmente
+    if (!req.session.spotifyAccessToken) {
+        return res.status(401).json({ success: false, needsLogin: true, loginUrl: '/login/spotify' });
+    }
+
+    try {
+        if (req.session.spotifyExpiresAt && Date.now() >= req.session.spotifyExpiresAt - 60000) {
+            await refreshSpotifyToken(req);
+        }
+    } catch (e) {
+        return res.status(401).json({ success: false, message: e.message, needsLogin: true, loginUrl: '/login/spotify' });
+    }
+
+    const { items, mode } = req.body || {};
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Se requiere un array de items (parse-setlist).' });
+    }
+
+    // Devuelve los items con el token de acceso para que el celular haga fetch directo
+    res.json({
+        success: true,
+        accessToken: req.session.spotifyAccessToken,
+        items: items,
+        mode: mode,
+        autoThreshold: Number(process.env.AUTO_ACCEPT_THRESHOLD) || 85,
+        manualThreshold: Number(process.env.MANUAL_THRESHOLD) || 50
+    });
+});
+
+// --- Búsqueda Spotify con scoring tradicional (requiere auth) ---
 app.post('/api/search-spotify', async (req, res) => {
     if (!req.session.spotifyAccessToken) {
         return res.status(401).json({ success: false, needsLogin: true, loginUrl: '/login/spotify' });
@@ -143,12 +183,16 @@ app.post('/api/search-spotify', async (req, res) => {
     try {
         if (req.session.spotifyExpiresAt && Date.now() >= req.session.spotifyExpiresAt - 60000) {
             await refreshSpotifyToken(req);
-        } else {
-            spotifyApi.setAccessToken(req.session.spotifyAccessToken);
         }
     } catch (e) {
         return res.status(401).json({ success: false, message: e.message, needsLogin: true, loginUrl: '/login/spotify' });
     }
+
+    const currentSpotifyApi = new SpotifyWebApi({
+        clientId: process.env.SPOTIFY_CLIENT_ID,
+        clientSecret: process.env.SPOTIFY_CLIENT_SECRET
+    });
+    currentSpotifyApi.setAccessToken(req.session.spotifyAccessToken);
 
     const { items, mode } = req.body || {};
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -162,7 +206,7 @@ app.post('/api/search-spotify', async (req, res) => {
     const allErrors = [];
 
     for (const item of items) {
-        const { matches, bestUri, bestScore, error } = await searchSpotifyWithScores(spotifyApi, item);
+        const { matches, bestUri, bestScore, error } = await searchSpotifyWithScores(currentSpotifyApi, item);
         if (error) {
             console.error('Spotify Search Error for', item.title, ':', error);
             allErrors.push(error);
@@ -213,17 +257,22 @@ app.post('/api/create-playlist', async (req, res) => {
         }
         try {
             if (req.session.spotifyExpiresAt && Date.now() >= req.session.spotifyExpiresAt - 60000) await refreshSpotifyToken(req);
-            else spotifyApi.setAccessToken(req.session.spotifyAccessToken);
+
+            const currentSpotifyApi = new SpotifyWebApi({
+                clientId: process.env.SPOTIFY_CLIENT_ID,
+                clientSecret: process.env.SPOTIFY_CLIENT_SECRET
+            });
+            currentSpotifyApi.setAccessToken(req.session.spotifyAccessToken);
 
             const playlistName = (rawPlaylistName && String(rawPlaylistName).trim()) || defaultPlaylistName();
             const desc = (description && String(description).trim()) || 'Creada desde setlist';
             const publicPlaylist = Boolean(isPublic);
 
-            const playlist = await spotifyApi.createPlaylist(playlistName, { description: desc, public: publicPlaylist });
+            const playlist = await currentSpotifyApi.createPlaylist(playlistName, { description: desc, public: publicPlaylist });
             const playlistId = playlist.body.id;
             const playlistUrl = playlist.body.external_urls.spotify;
             const uris = resolvedTracks.map(t => t.uri).filter(Boolean);
-            await addTracksToSpotifyPlaylist(playlistId, uris, spotifyApi);
+            await addTracksToSpotifyPlaylist(playlistId, uris, currentSpotifyApi);
 
             return res.json({
                 success: true,

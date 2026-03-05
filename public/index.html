@@ -464,23 +464,140 @@
                     return;
                 }
 
-                const searchRes = await fetch('/api/search-spotify', {
+                // === Bypass IP Ban (Búsqueda en el cliente) ===
+                const searchRes = await fetch('/api/search-spotify-client-passthrough', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({ items: items, mode: modeSelect.value }),
                 });
+
                 if (searchRes.status === 401) {
                     const d = await searchRes.json().catch(function () { return {}; });
                     if (d.loginUrl) { window.location.href = d.loginUrl; return; }
                 }
-                if (!searchRes.ok) {
-                    const err = await searchRes.json().catch(function () { return {}; });
-                    throw new Error(err.message || 'Error en búsqueda');
+
+                const setupData = await searchRes.json();
+                if (!setupData.success) throw new Error(setupData.message || 'Error inicializando proxy-bypass');
+
+                showMessage('Buscando canciones a través de tu celular...');
+                const accessToken = setupData.accessToken;
+                const autoThr = setupData.autoThreshold;
+                const manThr = setupData.manualThreshold;
+
+                let foundCount = 0, manualCount = 0, notFoundCount = 0;
+                let clientResults = [];
+                let clientErrors = [];
+
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    try {
+                        let query = '';
+                        if (item.artist) {
+                            query = 'track:"' + item.title + '" artist:"' + item.artist + '"';
+                        } else {
+                            query = '"' + item.title + '"';
+                        }
+
+                        // Si falla, es fallback suave solo al título
+                        const resp = await fetch('https://api.spotify.com/v1/search?type=track&limit=10&q=' + encodeURIComponent(query), {
+                            headers: { 'Authorization': 'Bearer ' + accessToken }
+                        });
+
+                        if (!resp.ok) {
+                            const eb = await resp.json().catch(() => ({}));
+                            throw new Error(eb.error ? eb.error.message : 'Error Status ' + resp.status);
+                        }
+
+                        const data = await resp.json();
+                        let tracks = data.tracks && data.tracks.items ? data.tracks.items : [];
+
+                        // Si no consiguio con queries extractos, intenta crudo global
+                        if (tracks.length === 0 && item.artist) {
+                            const queryB = item.title + ' ' + item.artist;
+                            const respB = await fetch('https://api.spotify.com/v1/search?type=track&limit=10&q=' + encodeURIComponent(queryB), {
+                                headers: { 'Authorization': 'Bearer ' + accessToken }
+                            });
+                            if (respB.ok) {
+                                const dataB = await respB.json();
+                                tracks = dataB.tracks && dataB.tracks.items ? dataB.tracks.items : [];
+                            }
+                        }
+
+                        // Calcular score sencillo de forma local (Client Side match)
+                        // Como no tenemos librería completa de similarity acá, haremos un match básico.
+                        function basicScore(inTit, inArt, trTit, trArt) {
+                            let score = 50;
+                            const t1 = (inTit || '').toLowerCase().trim();
+                            const t2 = (trTit || '').toLowerCase().trim();
+                            if (t1 && t2 && (t1 === t2 || t1.includes(t2) || t2.includes(t1))) score += 20;
+
+                            if (inArt) {
+                                const a1 = inArt.toLowerCase().trim();
+                                const a2 = (trArt || '').toLowerCase().trim();
+                                if (a1 && a2 && (a1 === a2 || a1.includes(a2) || a2.includes(a1))) score += 20;
+                            } else {
+                                score += 20; // Si no dio artista, somos indulgentes
+                            }
+                            // Bonus de exactitud
+                            if (t1 === t2) score += 10;
+                            return Math.min(100, score);
+                        }
+
+                        const matches = tracks.map(tr => {
+                            const trArtist = tr.artists && tr.artists[0] ? tr.artists[0].name : '';
+                            return {
+                                track: {
+                                    id: tr.id, uri: tr.uri, name: tr.name, artists: tr.artists || [],
+                                    album: { name: tr.album ? tr.album.name : '', images: tr.album ? tr.album.images : [] },
+                                    duration_ms: tr.duration_ms, preview_url: tr.preview_url, external_urls: tr.external_urls || {}
+                                },
+                                score: basicScore(item.title, item.artist, tr.name, trArtist),
+                                uri: tr.uri
+                            };
+                        }).sort((a, b) => b.score - a.score);
+
+                        const bestScore = matches.length > 0 ? matches[0].score : null;
+                        let status = 'not_found';
+                        if (bestScore != null) {
+                            if (bestScore >= autoThr) status = 'found';
+                            else if (bestScore >= manThr) status = 'manual';
+                        }
+
+                        if (status === 'found') foundCount++;
+                        else if (status === 'manual') manualCount++;
+                        else notFoundCount++;
+
+                        const resolvedUri = (modeSelect.value === 'auto' && status === 'found') ? matches[0].uri : undefined;
+
+                        clientResults.push({
+                            rawLine: item.rawLine,
+                            title: item.title,
+                            artist: item.artist,
+                            matches: matches,
+                            bestScore: bestScore,
+                            status: status,
+                            resolvedUri: resolvedUri || null
+                        });
+
+                    } catch (errItem) {
+                        console.error('Fetch C-Side falló para', item.title, errItem);
+                        clientErrors.push(errItem.message);
+                        notFoundCount++;
+                        clientResults.push({ rawLine: item.rawLine, title: item.title, artist: item.artist, matches: [], bestScore: null, status: 'not_found', resolvedUri: null });
+                    }
+                    await new Promise(r => setTimeout(r, 60)); // Ratelimit protection local
                 }
-                lastSearchPayload = await searchRes.json();
+
+                lastSearchPayload = {
+                    results: clientResults,
+                    summary: { total: items.length, found: foundCount, manual: manualCount, not_found: notFoundCount },
+                    apiErrors: [...new Set(clientErrors)]
+                };
+                // === Fin Bypass IP Ban ===
+
                 resolvedChoices = [];
-                renderResults(); // Must be called to populate `resolvedChoices` with default automatic matches
+                renderResults();
 
                 if (!isAutoCreate) {
                     resultsPanel.classList.remove('hidden');
