@@ -505,8 +505,9 @@
                         });
 
                         if (!resp.ok) {
-                            const eb = await resp.json().catch(() => ({}));
-                            throw new Error(eb.error ? eb.error.message : 'Error Status ' + resp.status);
+                            let rawErrorText = '';
+                            try { rawErrorText = await resp.text(); } catch (e) { rawErrorText = 'NO_TEXT'; }
+                            throw new Error('STATUS ' + resp.status + ' | MSG: ' + rawErrorText.substring(0, 150));
                         }
 
                         const data = await resp.json();
