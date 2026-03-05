@@ -28,6 +28,7 @@ app.use(cors({
 app.use(express.json());
 
 // --- Session ---
+app.set('trust proxy', 1);
 app.use(session({
     store: new FileStore({
         path: './sessions',
@@ -39,7 +40,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, httpOnly: true, maxAge: 1000 * 60 * 60 * 24, sameSite: 'lax', domain: undefined
+        secure: process.env.RENDER ? true : false, httpOnly: true, maxAge: 1000 * 60 * 60 * 24, sameSite: 'lax', domain: undefined
     }
 }));
 
