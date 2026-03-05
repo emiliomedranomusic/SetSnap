@@ -1,0 +1,16 @@
+{
+    "name": "Setlist to Spotify",
+    "short_name": "Setlist",
+    "description": "Convierte tus Setlists en Playlists de Spotify automáticamente",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f8fafc",
+    "theme_color": "#0f172a",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='.9em' font-size='28'>🎵</text></svg>",
+            "type": "image/svg+xml",
+            "sizes": "any"
+        }
+    ]
+}

@@ -1,0 +1,175 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<HTML lang='es'>
+<HEAD>
+<META HTTP-EQUIV="Content-Language" CONTENT="es">
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<META HTTP-EQUIV="Content-Script-Type" CONTENT="text/javascript">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<META NAME="description" CONTENT="Cómo tocar Me Voy, Julieta Venegas. Acordes">
+<META NAME="keywords" CONTENT="Me Voy Julieta Venegas, Me Voy acordes letras tabs guitarra música cancionero bajo ukulele partitura LaCuerda">
+<TITLE>ME VOY, Julieta Venegas: Acordes</TITLE>
+<link rel='dns-prefetch' href='https://cdn.lacuerda.net'>
+<link rel='dns-prefetch' href='https://www.googletagmanager.com'>
+<link rel='dns-prefetch' href='https://fonts.googleapis.com'>
+<link rel='dns-prefetch' href='https://fonts.gstatic.com'>
+<link rel='dns-prefetch' href='https://cdn.insurads.com'>
+
+<link rel='apple-touch-icon' href='//cdn.lacuerda.net/IMG/lc-favicon-196.png'>
+<link rel='icon' href='//cdn.lacuerda.net/IMG/lc-favicon-32.png' type='image/png' sizes='32x32'/>
+<link rel='icon' href='//cdn.lacuerda.net/IMG/lc-favicon-192.png' type='image/png' sizes='192x192'/>
+<script src="//cdn.lacuerda.net/UTIL/mainJS.js"></script>
+<script src="/TRAN/main.js?f2020"></script>
+<script>
+if (decodeURI(DO.cookie).indexOf('lc_stats=1') != -1 || 1 != 1) ADS('https://www.googletagmanager.com/gtag/js?id=UA-8916411-1');
+window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date());
+gtag('config', 'UA-8916411-1', {'cookie_domain':'.lacuerda.net'});
+var myAds = [{adu:'/37756251/728top', sz:[728, 90], id:'div-gpt-ad-1430236222398-0'}, {adu:'/37756251/160ros', sz:[160,600], id:'div-gpt-ad-1430236222398-1'}, {adu:'/37756251/tran728', sz:[728,90], id:'div-gpt-ad-1430236222398-3'}, {adu:'/37756251/layerTran', sz:[1,1],  id:'div-gpt-ad-1430236222398-4'}]; 
+
+ocod='jven0261', odes='RE LA SOL SIm', oclb='A:mecho;Mechoso';
+oband='Julieta Venegas', orola='Me Voy', otipo='R';
+ourl='/julieta_venegas/me_voy';
+trcal.push(['R',0,0,1]);
+trcal.push(['R',0,0,2]);
+trcal.push(['T',0,0,3]);
+trcal.push(['R',0,0,4]);
+</script>
+</script>
+<script async='async' src='https://www.googletagservices.com/tag/js/gpt.js'></script>
+<script async='async' src="//acordes.lacuerda.net/UTIL/pb.js"></script>
+<script async='async' src="//acordes.lacuerda.net/UTIL/pb_imp.js"></script>
+<script async src="https://cdn.insurads.com/bootstrap/55QXK4XS.js"></script>
+
+
+<LINK href="//acordes.lacuerda.net/UTIL/estilo.css" rel="stylesheet" type="text/css">
+<link rel='alternate' hreflang='es' href='https://acordes.lacuerda.net/julieta_venegas/me_voy.shtml' />
+<link rel='alternate' hreflang='en' href='https://chords.lacuerda.net/julieta_venegas/me_voy.shtml' />
+<link rel='alternate' hreflang='pt' href='https://cifras.lacuerda.net/julieta_venegas/me_voy.shtml' />
+</HEAD>
+
+<BODY onload="; bidStart();">
+<div id='mTopCont'></div>
+<div id='mMask' style='display:none'></div>
+<div id='mHead'>
+	<div class='mhTit' >Acordes de Julieta Venegas: Me Voy</div>
+</div>
+<script>mShTop();</script>
+<div id='mCols'><div id='mLeft'>
+<div id='mlMenu'>
+<div class='mlTit tlTit'>
+<a id='mlOpt1' href='javascript:tCal()'>Versiones</a>
+<a id='mlOpt2' href='javascript:bandList("julieta_venegas", 1)'>del Artista</a>
+<a id='mlOpt3' href='javascript:listHist()'>Historial</a>
+</div>
+<div id='tNav' class='tNav'><ul class='tList'><li style='padding:0'><div class='dotloader'></div></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li></div>
+</div>
+<div id=ban160><div id='div-gpt-ad-1430236222398-1' style='height:600px; width:160px;'><script>googletag.cmd.push(function() { googletag.display('div-gpt-ad-1430236222398-1'); });</script></div></div></div>
+
+<div class='mBody'>
+ 
+<div id=t_loader style='display:none'></div>
+<div id=tHead>
+<div id='tHtools'><div class='butCmd' onclick='addCSS("full")'></div><div class='butCmd tPrt' onclick='addCSS("print")'></div><div class='butCmd tTxt' onclick='return text()'></div><div class='butCmd starOff' onclick='favo()' id='favoImg'></div></div>
+<div id=tH1><h1><a class=r href='me_voy'>Me Voy</a> <span id='tH1span'></span></h1><h2><a href=./>Julieta Venegas</a></h2></div>
+<div id=tH2><div class='butCmd tClf' onclick='calf(ocod)'></div><div class=tH2div><div id='tH2cal' onclick='calf(ocod)'></div><span id='tH2txt'></span></div></div>
+<div id=tH3><div class='tCompo'></div>Julieta Venegas&nbsp; <A href="javascript:autor('jven0261')">corregir</A><br><div class='tAlbum'></div>Limón y sal <em>[2006]</em></div>
+<div id=tH4><pre id='tCode'></pre><div id='tColab'></div></div>
+</div>
+<div id=ban728><div id='div-gpt-ad-1430236222398-0'><script>googletag.cmd.push(function() { googletag.display('div-gpt-ad-1430236222398-0'); });</script></div></div><div id='tDiag2Cont'><div id=t_diag2 style='display:none'></div></div>
+<div id='tranCmds' style='display:block' onmouseenter='return helpShow(true)' onmouseleave='return helpShow(false)'>
+<div id='toolmenu'></div></div><div id='tExplain' style='display:none'></div><div id=t_body><PRE><div></div>    Intro.- <A>RE</A>.<A>LA</A>,<A>SOL</A>,<A>LA</A>.<A>RE</A> <A>LA</A>,<A>SOL</A>,<A>LA</A>
+
+<div></div>            <A>RE</A>              <A>LA</A>           <A>SIm</A>         <A>SOL</A>
+    Por que no supiste entender a mi corazon lo que había en el
+<div></div>           <A>RE</A>              <A>LA</A>               <A>SOL</A>
+    porque no tuviste el valor de ver quien soy
+<div></div><A>LA</A>         <A>RE</A>             <A>LA</A>                    <A>SIm</A>
+    porque no escuchas lo que esta tan cerca de ti
+<div></div>             <A>SOL</A>
+    solo el ruido de afuera
+<div></div>    <A>RE</A>                <A>LA</A>         <A>SOL</A>
+    yo que estoy a un lado desaparezco para ti
+<div></div>                <A>LA</A>              <A>RE</A>         <A>SOL</A>
+    no voy a llorar y decir que no merezco esto
+<div></div>                 <A>LA</A>             <A>RE</A>
+    porque es probable que lo merezco
+<div></div>               <A>SOL</A>               <A>RE</A>
+    pero no lo quiero por eso me voy
+
+    Estri.
+<div></div>        <A>LA</A>            <A>SIm</A>        <A>SOL</A>             <A>RE</A>
+    Que lástima pero adios me despido de ti y me voy
+<div></div>        <A>LA</A>            <A>SIm</A>        <A>SOL</A>        <A>SOL</A>,<A>RE</A>,<A>LA</A>,<A>SOL</A>,<A>LA</A>,<A>RE</A>,<A>LA</A>,<A>SOL</A>
+    que lástima pero adios me despido de ti
+<div></div><A>LA</A>          <A>RE</A>          <A>LA</A>          <A>SIm</A>
+    Por que se que me espera algo mejor
+<div></div>                <A>SOL</A>         <A>RE</A>
+    Alguien que sepa darme amor
+<div></div>                  <A>LA</A>              <A>SOL</A>                  <A>LA</A>
+    de ese que endulza la sal y hace que salga el sol
+<div></div><A>LA</A>            <A>RE</A>           <A>LA</A>
+    yo que pensé nunca me iria de ti
+<div></div>             <A>SIm</A>             <A>SOL</A>
+    que es amor del bueno de toda la vida
+<div></div>     <A>RE</A>           <A>LA</A>              <A>SOL</A>
+    pero hoy entendí que no hay suficiente para los dos
+
+    No voy a llorrar y decir.........
+
+    .....me despido de ti y me voy
+
+       El titulo de la cancion es ME VOY
+
+
+jomecho@gmail.com
+</PRE></div>
+<div id=abajo>
+<div id='ban728b'><div id='div-gpt-ad-1430236222398-3' style='height:90px; width:728px'><script type='text/javascript'>googletag.cmd.push(function() { googletag.display('div-gpt-ad-1430236222398-3'); });</script></div></div>
+<div id='VideoAd'></div><div id='div-gpt-ad-1430236222398-4' style='height:1px; width:1px;'><script type='text/javascript'>googletag.cmd.push(function() { googletag.display('div-gpt-ad-1430236222398-4'); });</script></div>
+<div id=tDisc>Este fichero es trabajo propio de su transcriptor y representa su
+interpretación personal de la canción. El material contenido en
+esta página es<BR>para exclusivo uso privado, por lo que se prohibe su
+reproducción o retransmisión, así como su uso para fines comerciales.
+</div></center>
+<div id='t_abajo'>
+<div id=t_coms><a href='javascript:coms()'>Mostrar Comentarios</a></div>
+<br>
+
+<br><div class=titulo>Otras canciones de Interés</div><div style='float:left; width:50%; margin-bottom:20px'><ul class='a_extra a_fix' style='width:100%'>
+<li><a title='Enero Y Abril acordes' href='/julieta_venegas/enero_y_abril'>Enero Y Abril</A></li>
+<li><a title='Eres para mí acordes' href='/julieta_venegas/eres_para_mi'>Eres para mí</A></li>
+<li><a title='Ese Camino acordes' href='/julieta_venegas/ese_camino'>Ese Camino</A></li>
+<li><a title='Esperaba acordes' href='/julieta_venegas/esperaba'>Esperaba</A></li>
+<li><a title='Esta Vez acordes' href='/julieta_venegas/esta_vez'>Esta Vez</A></li>
+<li><a title='Eterno acordes' href='/julieta_venegas/eterno'>Eterno</A></li>
+<li><a title='Explosión acordes' href='/julieta_venegas/explosion'>Explosión</A></li>
+<li><a title='Hermano Japonés acordes' href='/julieta_venegas/hermano_japones'>Hermano Japonés</A></li>
+<li><a title='Hoy acordes' href='/julieta_venegas/hoy'>Hoy</A></li>
+<li><a title='Hoy No Quiero acordes' href='/julieta_venegas/hoy_no_quiero'>Hoy No Quiero</A></li>
+</ul></div><div style='float:right; width:50%; margin-bottom:20px'><ul class='a_extra a_fix' style='width:100%'><li><a title='Ilusión acordes' href='/julieta_venegas/ilusion'>Ilusión</A></li>
+<li><a title='Instantánea acordes' href='/julieta_venegas/instantanea'>Instantánea</A></li>
+<li><a title='La Jaula de oro acordes' href='/julieta_venegas/la_jaula_de_oro'>La Jaula de oro</A></li>
+<li><a title='Lento acordes' href='/julieta_venegas/lento'>Lento</A></li>
+<li><a title='Limon y Sal acordes' href='/julieta_venegas/limon_y_sal'>Limon y Sal</A></li>
+<li><a title='Lo que tu me das acordes' href='/julieta_venegas/lo_que_tu_me_das'>Lo que tu me das</A></li>
+<li><a title='Lo que venga después acordes' href='/julieta_venegas/lo_que_venga_despues'>Lo que venga después</A></li>
+<li><a title='Los Momentos acordes' href='/julieta_venegas/los_momentos'>Los Momentos</A></li>
+<li><a title='Mala memoria acordes' href='/julieta_venegas/mala_memoria'>Mala memoria</A></li>
+<li><a title='Me Voy acordes' href='/julieta_venegas/me_voy'>Me Voy</A></li>
+</ul></div>
+<br clear=all style='height:1px; mrgin:0; padding:0'><center><A class=a_rlink style='display:inline' href="//chords.lacuerda.net/julieta_venegas/me_voy">[Me Voy chords]</A><A class=a_rlink style='display:inline' href="//cifras.lacuerda.net/julieta_venegas/me_voy">[Me Voy cifra]</A></center>
+</div>
+</div></div><div id='mRight'>
+<div id='mrShare'><div class='shareBut insta' onclick='w.location="//instagram.com/lacuerdanet/"'></div><div class='shareBut tweet' onclick='tShare(1)'></div><div class='shareBut fbook' onclick='tShare(0)'></div></div>
+<div id='mrVideo'><iframe id=ytFrame style='width:200px; height:136px' allow='accelerometer; encrypted-media; gyroscope; picture-in-picture' allowfullscreen></iframe><script>ytVid = "//www.youtube.com/embed/NPeI7gia2n8"</script></div>
+<div id=t_diag></div>
+<script>preload()</script>
+</div>
+</div>
+<div id='ban320'>
+<div id='div-gpt-ad-1430236222398-3' style='height:50px; width:320px;'><script>googletag.cmd.push(function() { googletag.display('div-gpt-ad-1430236222398-3'); });</script></div></div>
+<div id='mBot'>
+<b>&copy;</b> LaCuerda<font color=#a0a0a0>.net</font> &middot <a href=//lacuerda.net/Extras/legal.php>aviso legal</a> &middot; <a href=//lacuerda.net/Extras/privpol.php>privacidad</a> &middot; <a title='Acordes de Guitarra' href='//lacuerda.net/'>es</a>
+ &middot; <a title='Guitar Chords' href='//chords.lacuerda.net/'>en</a>
+ &middot; <a title='Cifras de Violão' href='//cifras.lacuerda.net/'>pt</a>
+ &middot; <a href=//lacuerda.net/Extras/contacto.php>contacto</a></div>
+</body></html>

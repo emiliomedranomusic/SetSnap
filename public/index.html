@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setlist → Spotify Playlist</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='.9em' font-size='28'>🎵</text></svg>">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='.9em' font-size='28'>🎵</text></svg>">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2b8cee",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                        "spotify-green": "#1DB954",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            min-height: max(884px, 100dvh);
+        }
+
+        .custom-shadow {
+            box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.04), 0 2px 8px -1px rgba(0, 0, 0, 0.02);
+        }
+
+        .result-link {
+            word-break: break-all;
+        }
+
+        .collapse-content {
+            overflow: hidden;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body class="bg-background-light min-h-screen text-slate-900 flex flex-col font-display">
+
+    <!-- Header -->
+    <header class="w-full max-w-2xl mx-auto px-6 py-8 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="bg-primary text-white p-2 rounded-full flex items-center justify-center">
+                <span class="material-symbols-outlined text-2xl">music_note</span>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight">Setlist to Spotify</h1>
+        </div>
+    </header>
+
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pb-20">
+        <!-- Main Utility Card -->
+        <section class="bg-white rounded-xl custom-shadow border border-slate-200 p-6 md:p-8">
+
+
+            <!-- Input setlist -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-3">
+                    <label for="song-list" class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Setlist
+                        Content</label>
+                    <div class="flex items-center gap-2">
+                        <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp"
+                            class="hidden text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition cursor-pointer">
+                        <button type="button"
+                            class="flex items-center gap-2 text-xs font-medium text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-all cursor-pointer border border-primary/20"
+                            onclick="document.getElementById('image-input').click()">
+                            <span class="material-symbols-outlined text-sm">photo_camera</span> Subir Imagen
+                        </button>
+                        <button type="button" id="extract-image-button"
+                            class="text-xs font-semibold py-1.5 px-3 rounded-full disabled:opacity-50 transition bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            disabled>Gemini Extract</button>
+                        <span id="extract-image-spinner" class="hidden text-xl animate-pulse">✨</span>
+                    </div>
+                </div>
+                <textarea id="song-list"
+                    class="w-full min-h-[160px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none text-sm"
+                    placeholder="Pega las canciones aquí (ej. Artista - Canción)..."></textarea>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <!-- Select Mode -->
+                <div class="flex flex-col gap-2">
+                    <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Modo de
+                        Funcionamiento</label>
+                    <div class="relative">
+                        <select id="mode-select"
+                            class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer pr-10">
+                            <option value="auto">Automático (Recomendado)</option>
+                            <option value="manual">Revisión Manual</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Inputs -->
+            <div class="pt-4 mb-8 space-y-4">
+                <div class="hidden">
+                    <label for="playlist-name"
+                        class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nombre de la
+                        Playlist</label>
+                    <input type="text" id="playlist-name"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                        placeholder="Opcional. Por defecto: Setlist - Fecha">
+                </div>
+
+                <div class="hidden">
+                    <label for="playlist-description"
+                        class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Descripción</label>
+                    <input type="text" id="playlist-description"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                        placeholder="Opcional. Creada desde setlist">
+                </div>
+
+                <label class="hidden items-center gap-3 cursor-pointer pt-2 w-fit">
+                    <div class="relative inline-flex items-center">
+                        <input type="checkbox" id="playlist-public" class="sr-only peer">
+                        <div
+                            class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
+                        </div>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700">Playlist Pública</span>
+                </label>
+
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="flex-1 flex flex-col gap-2">
+                        <label for="playlist-name"
+                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Nombre de la
+                            Playlist</label>
+                        <input type="text" id="playlist-name-2"
+                            onchange="document.getElementById('playlist-name').value = this.value"
+                            class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                            placeholder="Opcional. Por defecto: Setlist...">
+                    </div>
+
+                    <div class="flex-1 flex flex-col gap-2">
+                        <label for="playlist-description"
+                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Descripción</label>
+                        <input type="text" id="playlist-description-2"
+                            onchange="document.getElementById('playlist-description').value = this.value"
+                            class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                            placeholder="Opcional. Creada desde setlist">
+                    </div>
+                </div>
+
+                <label class="flex items-center gap-3 cursor-pointer pt-2 w-fit">
+                    <div class="relative inline-flex items-center">
+                        <input type="checkbox" id="playlist-public-2"
+                            onchange="document.getElementById('playlist-public').checked = this.checked"
+                            class="sr-only peer" checked>
+                        <div
+                            class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
+                        </div>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700">Playlist Pública</span>
+                </label>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
+                <!-- Search Button -->
+                <button id="search-button"
+                    class="w-full h-14 bg-slate-900 text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+                    <span class="material-symbols-outlined text-xl">search</span>
+                    <span>Buscar Canciones</span>
+                    <span id="search-spinner" class="hidden animate-spin">◒</span>
+                </button>
+
+                <!-- Create Playlist Button (Hidden until searched or in manual mode) -->
+                <button id="create-playlist-button"
+                    class="hidden w-full h-14 bg-primary text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+                    <span class="material-symbols-outlined text-xl">playlist_add</span>
+                    <span>Crear Playlist</span>
+                    <span id="create-spinner" class="hidden animate-spin">◒</span>
+                </button>
+
+                <!-- Spotify Connect Link -->
+                <div id="spotify-login-wrapper" class="w-full flex flex-col items-center col-span-1 sm:col-span-2">
+                    <a id="login-spotify-link" href="/login/spotify"
+                        class="w-full h-14 bg-spotify-green text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition-opacity no-underline">
+                        <span class="material-symbols-outlined text-xl">link</span>
+                        <span id="login-spotify-text">Conectar a Spotify</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="flex gap-2 justify-center mt-3">
+                <button id="reset-button"
+                    class="text-xs font-semibold py-1.5 px-3 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition hidden">Reiniciar</button>
+                <button id="copy-report-button"
+                    class="text-xs font-semibold py-1.5 px-3 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition hidden">Copiar
+                    Resumen</button>
+                <button id="download-json-button"
+                    class="text-xs font-semibold py-1.5 px-3 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition hidden">Descargar
+                    JSON</button>
+            </div>
+
+        </section>
+
+        <!-- Quick Message Panel -->
+        <div id="results-message" class="text-sm text-center text-slate-600 mt-6 font-medium"></div>
+
+        <!-- Search Results Panel -->
+        <section id="results-panel" class="hidden mt-8">
+            <div id="results-summary" class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">
+            </div>
+            <div id="results-list" class="space-y-3"></div>
+        </section>
+
+        <!-- Panel Para revisar -->
+        <div id="not-found-panel" class="hidden mt-6 bg-orange-50/50 border border-orange-100 rounded-[24px] p-6">
+            <h3 class="font-semibold text-orange-800 mb-3 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clip-rule="evenodd" />
+                </svg>
+                Para revisar manualmente
+            </h3>
+            <div id="not-found-list" class="space-y-3 text-sm"></div>
+        </div>
+    </main>
+
+    <footer class="text-center pb-8 opacity-60">
+        <p class="text-xs font-semibold text-slate-500">Utiliza la API oficial de Spotify. No estamos afiliados a
+            Spotify.
+        </p>
+    </footer>
+
+    <script>
+        const songListTextarea = document.getElementById('song-list');
+        const modeSelect = document.getElementById('mode-select');
+        const playlistNameInput = document.getElementById('playlist-name');
+        const playlistDescriptionInput = document.getElementById('playlist-description');
+        const playlistPublicCheckbox = document.getElementById('playlist-public');
+        const searchButton = document.getElementById('search-button');
+        const createPlaylistButton = document.getElementById('create-playlist-button');
+        const resetButton = document.getElementById('reset-button');
+        const copyReportButton = document.getElementById('copy-report-button');
+        const downloadJsonButton = document.getElementById('download-json-button');
+        const resultsMessage = document.getElementById('results-message');
+        const resultsPanel = document.getElementById('results-panel');
+        const resultsSummary = document.getElementById('results-summary');
+        const resultsList = document.getElementById('results-list');
+        const notFoundPanel = document.getElementById('not-found-panel');
+        const notFoundList = document.getElementById('not-found-list');
+
+        let lastSearchPayload = null;
+        let resolvedChoices = [];
+
+        function ensureCorrectHostForSpotify() {
+            if (window.location.hostname === 'localhost') {
+                window.location.hostname = '127.0.0.1';
+                return false;
+            }
+            return true;
+        }
+
+        function setSearchLoading(loading) {
+            searchButton.disabled = loading;
+            document.getElementById('search-spinner').classList.toggle('hidden', !loading);
+        }
+        function setCreateLoading(loading) {
+            createPlaylistButton.disabled = loading;
+            document.getElementById('create-spinner').classList.toggle('hidden', !loading);
+        }
+
+        function showMessage(text, isError = false) {
+            resultsMessage.innerHTML = text;
+            resultsMessage.className = 'text-sm text-center mb-4 ' + (isError ? 'text-red-600' : 'text-gray-600');
+        }
+
+        function msToDuration(ms) {
+            if (ms == null) return '—';
+            const s = Math.floor(ms / 1000);
+            const m = Math.floor(s / 60);
+            return m + ':' + String(s % 60).padStart(2, '0');
+        }
+
+        function buildResolvedTracks() {
+            if (!lastSearchPayload || !lastSearchPayload.results) return [];
+            const tracks = [];
+            lastSearchPayload.results.forEach((r, i) => {
+                const choice = resolvedChoices[i];
+                if (choice && choice.uri) tracks.push({ uri: choice.uri, rawLine: r.rawLine });
+                else if (r.status === 'found' && r.resolvedUri) tracks.push({ uri: r.resolvedUri, rawLine: r.rawLine });
+            });
+            return tracks;
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        function getAlbumImageUrl(album) {
+            if (!album || !album.images || !album.images.length) return '';
+            var img = album.images.find(function (i) { return i.width >= 64 && i.width <= 300; }) || album.images[album.images.length - 1];
+            return img ? img.url : (album.images[0] && album.images[0].url) || '';
+        }
+
+        function renderResults() {
+            if (!lastSearchPayload) return;
+            const { results, summary } = lastSearchPayload;
+            var paraRevisar = (summary.manual || 0) + (summary.not_found || 0);
+            resultsSummary.textContent = 'Líneas: ' + summary.total + ' · Encontradas auto: ' + summary.found + ' · Para revisar: ' + paraRevisar;
+            resolvedChoices = results.map((r, i) => {
+                if (resolvedChoices[i] !== undefined) return resolvedChoices[i];
+                if (r.status === 'found' && r.resolvedUri) return { uri: r.resolvedUri };
+                if (r.matches && r.matches[0]) return { uri: r.matches[0].uri };
+                return null;
+            });
+
+            resultsList.innerHTML = '';
+            results.forEach((row, idx) => {
+                const div = document.createElement('div');
+                div.className = 'px-5 py-5 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl transition duration-200 shadow-[0_2px_8px_rgb(0,0,0,0.02)]';
+                const isFound = row.status === 'found';
+                const statusLabel = isFound ? 'Encontrada' : 'Revisar';
+                const statusBadge = isFound ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800';
+                let html = '<div class="flex flex-wrap items-center gap-2 mb-3"><span class="font-mono text-xs text-gray-400">#' + (idx + 1) + '</span><span class="text-gray-800 font-medium">' + escapeHtml(row.rawLine) + '</span><span class="rounded-full px-2.5 py-0.5 text-xs font-medium ' + statusBadge + '">' + statusLabel + '</span>';
+                if (row.bestScore != null) html += '<span class="text-xs text-gray-500">' + row.bestScore + '% coincidencia</span>';
+                html += '</div>';
+
+                var matches = (row.matches || []);
+                var showPicker = !isFound || (isFound && matches.length > 1);
+
+                if (showPicker && matches.length > 0) {
+                    html += '<div class="space-y-2 mt-3">';
+                    matches.forEach((m, j) => {
+                        const t = m.track || {};
+                        const name = t.name || '';
+                        const artist = (t.artists && t.artists[0]) ? t.artists[0].name : '';
+                        const albumName = (t.album && t.album.name) ? t.album.name : '';
+                        const dur = msToDuration(t.duration_ms);
+                        const link = (t.external_urls && t.external_urls.spotify) ? t.external_urls.spotify : '#';
+                        const imgUrl = getAlbumImageUrl(t.album);
+                        const previewUrl = t.preview_url || '';
+                        const isSelected = resolvedChoices[idx] && resolvedChoices[idx].uri === m.uri;
+
+                        // Diseño de fila horizontal limpia (en lugar de grid vertical/largo)
+                        var isHiddenClass = (!isSelected && j >= 5) ? ' hidden extra-option-' + idx : '';
+                        html += '<div class="flex flex-wrap sm:flex-nowrap items-center gap-4 p-3 rounded-2xl border transition duration-200 ' + (isSelected ? 'border-slate-800 bg-slate-50' : 'border-slate-100 hover:border-slate-300 hover:bg-slate-50/50') + isHiddenClass + '">';
+                        if (imgUrl) html += '<img src="' + escapeHtml(imgUrl) + '" alt="" class="w-12 h-12 rounded-lg object-cover shadow-sm flex-shrink-0" loading="lazy">';
+                        else html += '<div class="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-400 text-[10px] text-center shadow-sm leading-tight">Sin<br>info</div>';
+
+                        html += '<div class="min-w-0 flex-1 flex flex-col justify-center overflow-hidden">';
+                        html += '<div class="font-semibold text-slate-800 truncate text-sm">' + escapeHtml(name) + '</div>';
+                        html += '<div class="text-[13px] text-slate-500 truncate">' + escapeHtml(artist) + (albumName ? ' &middot; ' + escapeHtml(albumName) : '') + '</div>';
+                        html += '</div>';
+
+                        html += '<div class="w-full sm:w-auto flex items-center gap-3 sm:ml-auto shrink-0 justify-end">';
+
+                        if (previewUrl) {
+                            html += '<audio controls preload="none" src="' + escapeHtml(previewUrl) + '" class="h-7 w-24"></audio>';
+                        }
+
+                        html += '<div class="flex items-center gap-2">';
+                        if (link !== '#') html += '<a href="' + link + '" target="_blank" rel="noopener" class="text-blue-600 text-[13px] font-medium hover:underline flex-shrink-0" title="Ver en Spotify"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>';
+                        html += '<span class="text-[13px] font-medium text-slate-400 min-w-[32px] text-right">' + m.score + '%</span>';
+                        html += '<button type="button" class="choose-track ml-2 px-4 py-1.5 rounded-full text-xs font-semibold transition shrink-0 ' + (isSelected ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/20' : 'bg-slate-100 text-slate-700 hover:bg-slate-200') + '" data-idx="' + idx + '" data-uri="' + escapeHtml(m.uri) + '">' + (isSelected ? 'Elegida' : 'Elegir') + '</button>';
+                        html += '</div>';
+
+                        html += '</div></div>';
+                    });
+                    html += '</div>';
+                    if (matches.length > 5) {
+                        html += '<div class="mt-2 flex justify-center w-full" id="ver-mas-container-' + idx + '"><button type="button" class="text-xs font-semibold px-5 py-2 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 transition drop-shadow-sm" onclick="document.querySelectorAll(\'.extra-option-' + idx + '\').forEach(function(e){e.classList.remove(\'hidden\');}); this.parentElement.remove();">Ver ' + (matches.length - 5) + ' opciones más ↓</button></div>';
+                    }
+                    html += '<div class="mt-3 flex justify-end"><button type="button" class="skip-line px-4 py-2 rounded-full text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition" data-idx="' + idx + '">Omitir canción</button></div>';
+                } else if (matches.length === 0 && !isFound) {
+                    html += '<div class="mt-3 py-3 text-sm text-orange-700 bg-orange-50/50 border border-orange-100 rounded-xl px-4 flex justify-between items-center">';
+                    html += '<span>Sin resultados claros en Spotify. Puedes omitirla.</span>';
+                    html += '<button type="button" class="skip-line px-4 py-1.5 rounded-full text-sm font-medium bg-white border border-orange-200 text-orange-700 hover:bg-orange-100 transition shadow-sm" data-idx="' + idx + '">Omitir</button>';
+                    html += '</div>';
+                } else if (isFound && row.resolvedUri && row.matches && row.matches[0]) {
+                    const t = row.matches[0].track || {};
+                    const link = (t.external_urls && t.external_urls.spotify) ? t.external_urls.spotify : row.resolvedUri;
+                    const imgUrl = getAlbumImageUrl(t.album);
+                    html += '<div class="mt-3 flex items-center gap-3 p-2 rounded-xl border border-green-200 bg-green-50/50 shadow-sm">';
+                    if (imgUrl) html += '<img src="' + escapeHtml(imgUrl) + '" alt="" class="w-10 h-10 rounded-lg object-cover">';
+                    html += '<div><a href="' + link + '" target="_blank" rel="noopener" class="text-green-700 font-medium hover:underline text-sm">' + escapeHtml(t.name || '') + ' – ' + escapeHtml((t.artists && t.artists[0]) ? t.artists[0].name : '') + '</a></div></div>';
+                }
+                div.innerHTML = html;
+                resultsList.appendChild(div);
+            });
+
+            document.querySelectorAll('.choose-track').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const idx = parseInt(this.getAttribute('data-idx'), 10);
+                    const uri = this.getAttribute('data-uri');
+                    resolvedChoices[idx] = { uri: uri };
+                    renderResults();
+                });
+            });
+            document.querySelectorAll('.skip-line').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const idx = parseInt(this.getAttribute('data-idx'), 10);
+                    resolvedChoices[idx] = { skip: true };
+                    renderResults();
+                });
+            });
+        }
+
+        async function doSearch(isAutoCreate = false) {
+            if (!ensureCorrectHostForSpotify()) return;
+            const rawText = songListTextarea.value.trim();
+            if (!rawText) {
+                showMessage('Introduce al menos una línea en el setlist.', true);
+                return;
+            }
+            setSearchLoading(true);
+            showMessage('Parseando y buscando en Spotify...');
+            try {
+                const parseRes = await fetch('/api/parse-setlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ rawText }),
+                });
+                if (!parseRes.ok) throw new Error('Error al parsear');
+                const parseData = await parseRes.json();
+                const items = parseData.items || [];
+                if (items.length === 0) {
+                    showMessage('No se detectaron líneas válidas.', true);
+                    setSearchLoading(false);
+                    return;
+                }
+
+                const searchRes = await fetch('/api/search-spotify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ items: items, mode: modeSelect.value }),
+                });
+                if (searchRes.status === 401) {
+                    const d = await searchRes.json().catch(function () { return {}; });
+                    if (d.loginUrl) { window.location.href = d.loginUrl; return; }
+                }
+                if (!searchRes.ok) {
+                    const err = await searchRes.json().catch(function () { return {}; });
+                    throw new Error(err.message || 'Error en búsqueda');
+                }
+                lastSearchPayload = await searchRes.json();
+                resolvedChoices = [];
+                renderResults(); // Must be called to populate `resolvedChoices` with default automatic matches
+
+                if (!isAutoCreate) {
+                    resultsPanel.classList.remove('hidden');
+                    createPlaylistButton.classList.remove('hidden');
+                }
+                resetButton.classList.remove('hidden');
+                copyReportButton.classList.remove('hidden');
+                downloadJsonButton.classList.remove('hidden');
+
+                const s = lastSearchPayload.summary;
+                if (!isAutoCreate) {
+                    var paraRevisar = (s.manual || 0) + (s.not_found || 0);
+                    if (paraRevisar > 0) {
+                        notFoundPanel.classList.remove('hidden');
+                        notFoundPanel.querySelector('h3').textContent = 'Para revisar (' + paraRevisar + ')';
+                        notFoundList.innerHTML = lastSearchPayload.results
+                            .filter(function (r) { return r.status !== 'found'; })
+                            .map(function (r) {
+                                var score = r.bestScore != null ? r.bestScore + '%' : (r.matches && r.matches.length ? 'ver opciones' : 'sin resultados');
+                                return '<div class="flex justify-between gap-2"><span class="text-amber-800">' + escapeHtml(r.rawLine) + '</span><span class="text-amber-600 text-sm">' + score + '</span></div>';
+                            })
+                            .join('');
+                    } else {
+                        notFoundPanel.classList.add('hidden');
+                    }
+                }
+
+                if (isAutoCreate) {
+                    // Start automatic playlist creation in background
+                    await doCreatePlaylist();
+                } else {
+                    var rev = (s.manual || 0) + (s.not_found || 0);
+                    showMessage('Se detectaron ' + s.total + ' líneas. ' + s.found + ' encontradas automáticamente, ' + rev + ' para revisar (elige la opción correcta).');
+                }
+            } catch (e) {
+                showMessage(e.message || 'Error de red.', true);
+            }
+            setSearchLoading(false);
+        }
+
+        async function doCreatePlaylist() {
+            const tracks = buildResolvedTracks();
+            if (tracks.length === 0) {
+                showMessage('No hay canciones seleccionadas para la playlist.', true);
+                return;
+            }
+            if (!ensureCorrectHostForSpotify()) return;
+            setCreateLoading(true);
+            showMessage('Creando playlist...');
+            try {
+                const res = await fetch('/api/create-playlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        resolvedTracks: tracks,
+                        playlistName: playlistNameInput.value.trim() || undefined,
+                        description: playlistDescriptionInput.value.trim() || undefined,
+                        public: playlistPublicCheckbox.checked,
+                    }),
+                });
+                if (res.status === 401) {
+                    const d = await res.json().catch(function () { return {}; });
+                    if (d.loginUrl) { window.location.href = d.loginUrl; return; }
+                }
+                if (!res.ok) {
+                    const err = await res.json().catch(function () { return {}; });
+                    throw new Error(err.message || 'Error al crear');
+                }
+                const data = await res.json();
+                showMessage('Playlist creada. <a href="' + data.playlistUrl + '" target="_blank" rel="noopener" class="text-green-600 hover:underline">Abrir en Spotify</a>');
+            } catch (e) {
+                showMessage(e.message || 'Error.', true);
+            }
+            setCreateLoading(false);
+        }
+
+        function doReset() {
+            lastSearchPayload = null;
+            resolvedChoices = [];
+            resultsPanel.classList.add('hidden');
+            notFoundPanel.classList.add('hidden');
+            createPlaylistButton.classList.add('hidden');
+            resetButton.classList.add('hidden');
+            copyReportButton.classList.add('hidden');
+            downloadJsonButton.classList.add('hidden');
+            showMessage('');
+        }
+
+        function doCopyReport() {
+            if (!lastSearchPayload) return;
+            const s = lastSearchPayload.summary;
+            var rev = (s.manual || 0) + (s.not_found || 0);
+            const text = 'Setlist: ' + s.total + ' líneas | Encontradas auto: ' + s.found + ' | Para revisar: ' + rev;
+            navigator.clipboard.writeText(text).then(function () { showMessage('Resumen copiado al portapapeles.'); });
+        }
+
+        function doDownloadJson() {
+            if (!lastSearchPayload) return;
+            const blob = new Blob([JSON.stringify(lastSearchPayload, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'setlist-results.json';
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showMessage('JSON descargado.');
+        }
+
+
+
+        searchButton.addEventListener('click', function () {
+            doSearch(modeSelect.value === 'auto');
+        });
+
+        modeSelect.addEventListener('change', function () {
+            var searchSpan = searchButton.querySelector('span:nth-child(2)');
+            if (modeSelect.value === 'auto') {
+                searchSpan.textContent = 'Crear playlist auto.';
+                searchButton.title = 'Busca y crea la playlist enseguida con las mejores coincidencias';
+                if (!resultsPanel.classList.contains('hidden')) {
+                    createPlaylistButton.classList.add('hidden'); // Hide creating manually if auto mode is selected
+                }
+            } else {
+                searchSpan.textContent = 'Buscar Canciones';
+                searchButton.title = 'Buscar canciones en Spotify para revisar antes de crear';
+                if (!resultsPanel.classList.contains('hidden')) {
+                    createPlaylistButton.classList.remove('hidden');
+                }
+            }
+        });
+        modeSelect.dispatchEvent(new Event('change'));
+        createPlaylistButton.addEventListener('click', doCreatePlaylist);
+        resetButton.addEventListener('click', doReset);
+        copyReportButton.addEventListener('click', doCopyReport);
+        downloadJsonButton.addEventListener('click', doDownloadJson);
+
+        // Navegación normal a Spotify (sin preventDefault para evitar interferencias)
+        document.getElementById('login-spotify-link').addEventListener('click', function () {
+            showMessage('Redirigiendo a Spotify...', false);
+        });
+
+        window.addEventListener('DOMContentLoaded', function () {
+            const saved = localStorage.getItem('playlistFormSongs');
+            if (saved) songListTextarea.value = saved;
+            const savedName = localStorage.getItem('playlistFormName');
+            if (savedName) playlistNameInput.value = savedName;
+
+            // Verificar sesión primero, luego decidir si redirigir
+            fetch('/api/spotify-status', { credentials: 'include' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    // Solo redirigir a 127.0.0.1 si estamos en localhost y NO hay sesión
+                    if (window.location.hostname === 'localhost' && !data.loggedIn) {
+                        var url = 'http://127.0.0.1:' + (window.location.port || '80') + window.location.pathname + window.location.search;
+                        window.location.replace(url);
+                        return;
+                    }
+
+                    // Actualizar UI según estado de sesión
+                    var link = document.getElementById('login-spotify-link');
+                    var text = document.getElementById('login-spotify-text');
+                    var wrapper = document.getElementById('spotify-login-wrapper');
+                    if (!link || !text || !wrapper) return;
+
+                    var existingAgain = document.getElementById('spotify-login-again');
+                    if (existingAgain) existingAgain.remove();
+
+                    if (data && data.loggedIn) {
+                        text.textContent = 'Conectado con Spotify';
+                        link.classList.add('opacity-90');
+                        var again = document.createElement('a');
+                        again.id = 'spotify-login-again';
+                        again.href = '/login/spotify';
+                        again.className = 'text-sm text-green-700 font-medium hover:text-green-800 underline mt-2';
+                        again.textContent = 'Conectar de nuevo';
+                        wrapper.appendChild(again);
+                    } else {
+                        text.textContent = 'Conectar con Spotify';
+                        link.classList.remove('opacity-90');
+                    }
+                })
+                .catch(function () {
+                    // Si hay error, igual intentar redirigir si es localhost
+                    if (window.location.hostname === 'localhost') {
+                        var url = 'http://127.0.0.1:' + (window.location.port || '80') + window.location.pathname + window.location.search;
+                        window.location.replace(url);
+                    }
+                });
+        });
+        songListTextarea.addEventListener('blur', function () { localStorage.setItem('playlistFormSongs', songListTextarea.value); });
+        playlistNameInput.addEventListener('blur', function () { localStorage.setItem('playlistFormName', playlistNameInput.value); });
+
+        var imageInput = document.getElementById('image-input');
+        var extractImageButton = document.getElementById('extract-image-button');
+        var extractImageSpinner = document.getElementById('extract-image-spinner');
+        imageInput.addEventListener('change', function () { extractImageButton.disabled = !imageInput.files || imageInput.files.length === 0; });
+        extractImageButton.addEventListener('click', function () {
+            if (!imageInput.files || !imageInput.files[0]) return;
+            extractImageButton.disabled = true;
+            extractImageSpinner.classList.remove('hidden');
+            var formData = new FormData();
+            formData.append('image', imageInput.files[0]);
+            fetch('/api/extract-setlist-from-image', { method: 'POST', credentials: 'include', body: formData })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+                .then(function (o) {
+                    extractImageButton.disabled = false;
+                    extractImageSpinner.classList.add('hidden');
+                    if (o.ok && o.data.items && o.data.items.length) {
+                        var lines = o.data.items.map(function (it) {
+                            if (it.title && it.artist) return it.title + ' - ' + it.artist;
+                            if (it.rawLine) return it.rawLine;
+                            return it.title || it.artist || '';
+                        }).filter(Boolean);
+                        songListTextarea.value = lines.join('\n');
+                        showMessage('Se extrajeron ' + lines.length + ' líneas. Revisa y pulsa Buscar.');
+                    } else {
+                        showMessage(o.data.message || 'No se pudieron extraer líneas.', true);
+                    }
+                })
+                .catch(function () {
+                    extractImageButton.disabled = false;
+                    extractImageSpinner.classList.add('hidden');
+                    showMessage('Error al procesar la imagen.', true);
+                });
+        });
+
+        // Registrar Service Worker para PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js').then(function (registration) {
+                    console.log('ServiceWorker registration successful');
+                }, function (err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>

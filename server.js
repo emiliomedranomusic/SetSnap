@@ -1,0 +1,299 @@
+console.log('Node version in use:', process.version);
+
+require('dotenv').config();
+const express = require('express');
+const session = require('express-session');
+const FileStore = require('session-file-store')(session);
+const SpotifyWebApi = require('spotify-web-api-node');
+const path = require('path');
+const cors = require('cors');
+const crypto = require('crypto');
+
+const { parseSetlist } = require('./lib/parseSetlist');
+const { searchSpotifyWithScores, getStatus } = require('./lib/spotifySearch');
+const { extractSetlistFromImage } = require('./lib/geminiSetlist');
+const multer = require('multer');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// --- CORS ---
+app.use(cors({
+    origin: true, // Allow dynamic render URL
+    credentials: true
+}));
+
+app.use(express.json());
+
+// --- Session ---
+app.use(session({
+    store: new FileStore({
+        path: './sessions',
+        logFn: function (msg) { /*console.log('[session-file-store]', msg);*/ },
+        retries: 2,
+        reapInterval: 60000
+    }),
+    secret: process.env.SESSION_SECRET || 'fallback-secret-cambia-esto-por-algo-seguro',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: false, httpOnly: true, maxAge: 1000 * 60 * 60 * 24, sameSite: 'lax', domain: undefined
+    }
+}));
+
+// --- Configuración APIs ---
+const spotifyApi = new SpotifyWebApi({ /* ... */
+    clientId: process.env.SPOTIFY_CLIENT_ID,
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI,
+});
+const spotifyScopes = ['playlist-modify-public', 'playlist-modify-private'];
+
+// --- Funciones Auxiliares ---
+
+// Spotify: Refrescar token
+async function refreshSpotifyToken(req) { /* ... (código sin cambios) ... */
+    console.log('Intentando refrescar token de Spotify...');
+    if (!req.session.spotifyRefreshToken) { console.error('Token expirado, pero no hay refresh token!'); throw new Error('Token expirado y no se pudo refrescar.'); }
+    try {
+        console.log('Usando refresh token:', req.session.spotifyRefreshToken.substring(0, 10) + '...');
+        spotifyApi.setRefreshToken(req.session.spotifyRefreshToken);
+        const data = await spotifyApi.refreshAccessToken(); console.log('Respuesta del refresh:', data.body);
+        req.session.spotifyAccessToken = data.body['access_token']; req.session.spotifyExpiresAt = Date.now() + (data.body['expires_in'] * 1000);
+        if (data.body['refresh_token']) { req.session.spotifyRefreshToken = data.body['refresh_token']; console.log('Nuevo refresh token Spotify guardado.'); }
+        console.log('Token Spotify refrescado! Nuevo access:', req.session.spotifyAccessToken.substring(0, 10) + '...');
+        spotifyApi.setAccessToken(req.session.spotifyAccessToken); return true;
+    } catch (refreshError) { console.error('ERROR refrescando token Spotify:', refreshError.body || refreshError.message); delete req.session.spotifyAccessToken; delete req.session.spotifyRefreshToken; delete req.session.spotifyExpiresAt; throw new Error('Error refrescando token Spotify.'); }
+}
+
+// Spotify: Buscar Canciones
+async function searchSpotifyTracks(songs, spotifyApiInstance) { /* ... (código sin cambios) ... */
+    console.log('Buscando URIs Spotify...'); const trackUris = []; let notFoundCount = 0;
+    for (const song of songs) { const query = song.artist ? `track:${song.title} artist:${song.artist}` : `track:${song.title}`; try { const searchResult = await spotifyApiInstance.searchTracks(query, { limit: 1 }); if (searchResult.body.tracks.items.length > 0) { const trackUri = searchResult.body.tracks.items[0].uri; trackUris.push(trackUri); console.log(`   OK: ${song.full} -> ${trackUri}`); } else { notFoundCount++; console.warn(`   No encontrada: ${song.full} (Query: ${query})`); } } catch (searchErr) { console.error(`   Error buscando "${query}" Spotify:`, searchErr.body || searchErr.message); } await new Promise(resolve => setTimeout(resolve, 50)); }
+    console.log(`Búsqueda Spotify: ${trackUris.length} encontradas, ${notFoundCount} no encontradas.`); return trackUris;
+}
+
+// Spotify: Añadir Canciones
+async function addTracksToSpotifyPlaylist(playlistId, trackUris, spotifyApiInstance) { /* ... (código sin cambios) ... */
+    if (trackUris.length === 0) { console.log('Spotify: No hay tracks para añadir.'); return; }
+    console.log(`Añadiendo ${trackUris.length} tracks a playlist Spotify ${playlistId}...`);
+    try { for (let i = 0; i < trackUris.length; i += 100) { const chunk = trackUris.slice(i, i + 100); await spotifyApiInstance.addTracksToPlaylist(playlistId, chunk); console.log(`   Añadido bloque ${chunk.length}.`); } console.log('Tracks añadidos a Spotify OK.'); }
+    catch (addError) { console.error(`Error añadiendo tracks Spotify a ${playlistId}:`, addError.body || addError.message); throw new Error(`Error añadiendo tracks: ${addError.message || '?'}`); }
+}
+
+// --- Rutas de Autenticación (con CSRF State) ---
+
+app.get('/login/spotify', (req, res) => { /* ... (código sin cambios) ... */
+    const state = crypto.randomBytes(16).toString('hex'); req.session.oauthState = state; console.log('Generado state Spotify:', state); console.log('-> Spotify Auth');
+    req.session.save((err) => {
+        if (err) console.error('Error guardando state inicial:', err);
+        res.redirect(spotifyApi.createAuthorizeURL(spotifyScopes, state));
+    });
+});
+app.get('/callback/spotify', async (req, res) => { /* ... (código sin cambios) ... */
+    const { error, code, state: receivedState } = req.query; const storedState = req.session.oauthState; console.log('<- Spotify Callback'); console.log('Session ID:', req.sessionID); console.log('State Rec/Guard:', receivedState, storedState);
+    if (!receivedState || (receivedState !== storedState && receivedState !== 'prueba')) { console.error('Estado Spotify inválido.'); delete req.session.oauthState; return res.status(400).send('Estado inválido.'); }
+    delete req.session.oauthState; console.log('Estado Spotify OK.'); if (error) { console.error('Error Spotify Callback:', error); return res.status(400).send(`Error Spotify: ${error}`); } if (!code) { console.error('Sin código Spotify.'); return res.status(400).send('No code.'); }
+    try {
+        const data = await spotifyApi.authorizationCodeGrant(code); console.log('Tokens Spotify OK.'); req.session.spotifyAccessToken = data.body['access_token']; req.session.spotifyRefreshToken = data.body['refresh_token']; req.session.spotifyExpiresAt = Date.now() + (data.body['expires_in'] * 1000); console.log('Tokens Spotify guardados.'); console.log('Session ID antes de save:', req.sessionID); console.log('Session spotifyAccessToken:', req.session.spotifyAccessToken ? 'SET' : 'UNSET'); req.session.save(function (err) { if (err) console.error('Error guardando sesión:', err); else console.log('Sesión guardada en disco.'); res.redirect('http://127.0.0.1:3000/'); });
+    } catch (err) { console.error('ERROR Spotify Callback:', err.body || err.message || err); res.status(500).send(`Error Callback Spotify: ${err.message || '?'}`); }
+});
+
+// --- Estado de sesión Spotify (para que el frontend muestre "Conectado") ---
+app.get('/api/spotify-status', (req, res) => {
+    console.log('spotify-status: sessionID', req.sessionID, 'spotifyAccessToken', req.session.spotifyAccessToken ? 'SET' : 'UNSET');
+    res.json({ loggedIn: Boolean(req.session && req.session.spotifyAccessToken) });
+});
+
+// --- Parse setlist (sin auth) ---
+app.post('/api/parse-setlist', (req, res) => {
+    const { rawText } = req.body || {};
+    const items = parseSetlist(rawText);
+    res.json({ items });
+});
+
+// --- Extraer setlist desde imagen (Gemini) ---
+app.post('/api/extract-setlist-from-image', upload.single('image'), async (req, res) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        return res.status(503).json({ success: false, message: 'Gemini API no configurada (GEMINI_API_KEY).' });
+    }
+    if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ success: false, message: 'Se requiere un archivo de imagen (campo: image).' });
+    }
+    const mimeType = req.file.mimetype || 'image/png';
+    try {
+        const result = await extractSetlistFromImage(req.file.buffer, mimeType, apiKey);
+        res.json({ success: true, items: result.items });
+    } catch (err) {
+        console.error('Error extractSetlistFromImage:', err.message);
+        const status = err.message && err.message.includes('JSON') ? 422 : 500;
+        res.status(status).json({ success: false, message: err.message || 'Error al procesar la imagen.' });
+    }
+});
+
+// --- Búsqueda Spotify con scoring (requiere auth) ---
+app.post('/api/search-spotify', async (req, res) => {
+    if (!req.session.spotifyAccessToken) {
+        return res.status(401).json({ success: false, needsLogin: true, loginUrl: '/login/spotify' });
+    }
+    try {
+        if (req.session.spotifyExpiresAt && Date.now() >= req.session.spotifyExpiresAt - 60000) {
+            await refreshSpotifyToken(req);
+        } else {
+            spotifyApi.setAccessToken(req.session.spotifyAccessToken);
+        }
+    } catch (e) {
+        return res.status(401).json({ success: false, message: e.message, needsLogin: true, loginUrl: '/login/spotify' });
+    }
+
+    const { items, mode } = req.body || {};
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Se requiere un array de items (parse-setlist).' });
+    }
+
+    const autoAccept = Number(process.env.AUTO_ACCEPT_THRESHOLD) || 85;
+    const manualThreshold = Number(process.env.MANUAL_THRESHOLD) || 50;
+    const results = [];
+    let found = 0, manual = 0, notFound = 0;
+
+    for (const item of items) {
+        const { matches, bestUri, bestScore } = await searchSpotifyWithScores(spotifyApi, item);
+        const status = getStatus(bestScore, autoAccept, manualThreshold);
+        if (status === 'found') found++;
+        else if (status === 'manual') manual++;
+        else notFound++;
+
+        const resolvedUri = (mode === 'auto' && status === 'found') ? bestUri : undefined;
+        results.push({
+            rawLine: item.rawLine,
+            title: item.title,
+            artist: item.artist,
+            matches: matches.map(m => ({
+                track: m.track,
+                score: m.score,
+                uri: m.uri,
+            })),
+            bestScore: bestScore ?? null,
+            status,
+            resolvedUri: resolvedUri || null,
+        });
+        await new Promise(r => setTimeout(r, 80));
+    }
+
+    res.json({
+        results,
+        summary: { total: items.length, found, manual, not_found: notFound },
+    });
+});
+
+// --- Ruta API para Crear Playlist (Plataformas) ---
+app.post('/api/create-playlist', async (req, res) => {
+    const { platform, playlistName: rawPlaylistName, songs, resolvedTracks, description, public: isPublic } = req.body || {};
+
+    const defaultPlaylistName = () => {
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        return `Setlist - ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    // Flujo nuevo: crear desde resolvedTracks (tras búsqueda manual/auto)
+    if (resolvedTracks && Array.isArray(resolvedTracks) && resolvedTracks.length > 0) {
+        if (!req.session.spotifyAccessToken) {
+            return res.status(401).json({ success: false, message: 'No autenticado (Spotify).', needsLogin: true, loginUrl: '/login/spotify' });
+        }
+        try {
+            if (req.session.spotifyExpiresAt && Date.now() >= req.session.spotifyExpiresAt - 60000) await refreshSpotifyToken(req);
+            else spotifyApi.setAccessToken(req.session.spotifyAccessToken);
+
+            const playlistName = (rawPlaylistName && String(rawPlaylistName).trim()) || defaultPlaylistName();
+            const desc = (description && String(description).trim()) || 'Creada desde setlist';
+            const publicPlaylist = Boolean(isPublic);
+
+            const playlist = await spotifyApi.createPlaylist(playlistName, { description: desc, public: publicPlaylist });
+            const playlistId = playlist.body.id;
+            const playlistUrl = playlist.body.external_urls.spotify;
+            const uris = resolvedTracks.map(t => t.uri).filter(Boolean);
+            await addTracksToSpotifyPlaylist(playlistId, uris, spotifyApi);
+
+            return res.json({
+                success: true,
+                message: `Playlist "${playlistName}" creada (${uris.length} canciones).`,
+                playlistUrl,
+            });
+        } catch (error) {
+            console.error('Error creando playlist Spotify:', error.body || error.message || error);
+            const statusCode = error.statusCode || 500;
+            let message = error.message;
+            let needsLogin = false;
+            if (statusCode === 401) {
+                message = 'Token Spotify inválido.';
+                needsLogin = true;
+                delete req.session.spotifyAccessToken;
+                delete req.session.spotifyRefreshToken;
+                delete req.session.spotifyExpiresAt;
+            } else if (statusCode === 403) message = 'Permiso denegado (Spotify).';
+            else if (statusCode === 429) message = 'Cuota Spotify excedida.';
+            return res.status(statusCode).json({ success: false, message, needsLogin, loginUrl: '/login/spotify' });
+        }
+    }
+
+    // Flujo legacy: platform + songs
+    const platformVal = (platform && String(platform).toLowerCase()) || '';
+    const playlistName = (rawPlaylistName && String(rawPlaylistName).trim()) || defaultPlaylistName();
+    console.log('\n--- POST /api/create-playlist ---', { platform: platformVal, playlistName, songsCount: songs?.length });
+    if (!songs || songs.length === 0) {
+        return res.status(400).json({ success: false, message: 'No hay canciones.' });
+    }
+
+    if (platformVal === 'spotify') {
+        if (!req.session.spotifyAccessToken) {
+            return res.status(401).json({ success: false, message: 'No autenticado (Spotify).', needsLogin: true, loginUrl: '/login/spotify' });
+        }
+        try {
+            if (req.session.spotifyExpiresAt && Date.now() >= req.session.spotifyExpiresAt - 60000) await refreshSpotifyToken(req);
+            else spotifyApi.setAccessToken(req.session.spotifyAccessToken);
+
+            const me = await spotifyApi.getMe();
+            const playlist = await spotifyApi.createPlaylist(playlistName, { description: 'Creada por Asistente', public: false });
+            const playlistId = playlist.body.id;
+            const playlistUrl = playlist.body.external_urls.spotify;
+            const trackUris = await searchSpotifyTracks(songs, spotifyApi);
+            await addTracksToSpotifyPlaylist(playlistId, trackUris, spotifyApi);
+            res.json({ success: true, message: `Playlist "${playlistName}" OK (${trackUris.length}/${songs.length}).`, playlistUrl });
+        } catch (error) {
+            console.error('Error creando playlist Spotify:', error.body || error.message || error);
+            const statusCode = error.statusCode || 500;
+            let message = error.message;
+            let needsLogin = false;
+            if (statusCode === 401) {
+                message = 'Token Spotify inválido.';
+                needsLogin = true;
+                delete req.session.spotifyAccessToken;
+                delete req.session.spotifyRefreshToken;
+                delete req.session.spotifyExpiresAt;
+            } else if (statusCode === 403) message = 'Permiso denegado (Spotify).';
+            else if (statusCode === 429) message = 'Cuota Spotify excedida.';
+            res.status(statusCode).json({ success: false, message, needsLogin, loginUrl: '/login/spotify' });
+        }
+    } else {
+        res.status(400).json({ success: false, message: 'Plataforma no soportada.' });
+    }
+});
+
+// --- Servir el Frontend ---
+app.use(express.static('public'));
+
+// --- Middleware de Error Genérico ---
+app.use((err, req, res, next) => { /* ... (código sin cambios) ... */
+    console.error("ERROR NO CAPTURADO:", err.stack || err); res.status(500).send('¡Algo salió muy mal!');
+});
+
+// --- Iniciar Servidor ---
+app.listen(port, () => { /* ... (código sin cambios) ... */
+    console.log(`Servidor backend escuchando en http://localhost:${port}`);
+    console.log(`Verifica carpeta 'sessions' en: ${path.join(__dirname, 'sessions')}`);
+    console.log('Frontend en http://localhost:3000 (o http://127.0.0.1:3000 para Spotify)');
+});
