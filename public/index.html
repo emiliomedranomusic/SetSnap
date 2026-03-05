@@ -332,9 +332,15 @@
 
         function renderResults() {
             if (!lastSearchPayload) return;
-            const { results, summary } = lastSearchPayload;
+            const { results, summary, apiErrors } = lastSearchPayload;
             var paraRevisar = (summary.manual || 0) + (summary.not_found || 0);
-            resultsSummary.textContent = 'Líneas: ' + summary.total + ' · Encontradas auto: ' + summary.found + ' · Para revisar: ' + paraRevisar;
+
+            let summaryHtml = 'Líneas: ' + summary.total + ' · Encontradas auto: ' + summary.found + ' · Para revisar: ' + paraRevisar;
+            if (apiErrors && apiErrors.length > 0) {
+                summaryHtml += '<div class="mt-2 text-red-600 bg-red-50 p-2 rounded text-xs font-mono">⚠️ Error(es) de APIs devueltos: ' + escapeHtml(apiErrors.join(' | ')) + '</div>';
+            }
+            resultsSummary.innerHTML = summaryHtml;
+
             resolvedChoices = results.map((r, i) => {
                 if (resolvedChoices[i] !== undefined) return resolvedChoices[i];
                 if (r.status === 'found' && r.resolvedUri) return { uri: r.resolvedUri };

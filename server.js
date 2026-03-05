@@ -159,9 +159,14 @@ app.post('/api/search-spotify', async (req, res) => {
     const manualThreshold = Number(process.env.MANUAL_THRESHOLD) || 50;
     const results = [];
     let found = 0, manual = 0, notFound = 0;
+    const allErrors = [];
 
     for (const item of items) {
-        const { matches, bestUri, bestScore } = await searchSpotifyWithScores(spotifyApi, item);
+        const { matches, bestUri, bestScore, error } = await searchSpotifyWithScores(spotifyApi, item);
+        if (error) {
+            console.error('Spotify Search Error for', item.title, ':', error);
+            allErrors.push(error);
+        }
         const status = getStatus(bestScore, autoAccept, manualThreshold);
         if (status === 'found') found++;
         else if (status === 'manual') manual++;
@@ -187,6 +192,7 @@ app.post('/api/search-spotify', async (req, res) => {
     res.json({
         results,
         summary: { total: items.length, found, manual, not_found: notFound },
+        apiErrors: [...new Set(allErrors)]
     });
 });
 
