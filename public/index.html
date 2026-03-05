@@ -210,6 +210,10 @@
                         <span class="material-symbols-outlined text-xl">link</span>
                         <span id="login-spotify-text">Conectar a Spotify</span>
                     </a>
+                    <p id="facebook-login-warning" class="text-[10px] text-slate-400 mt-2 text-center leading-tight">
+                        Nota: Si instalaste la aplicación (PWA), el inicio de sesión vía <b>Facebook</b> podría ser
+                        revocado por medidas de rastreo de Meta. Te recomendamos iniciar con tu Email de Spotify.
+                    </p>
                 </div>
             </div>
 
@@ -761,14 +765,20 @@
                     var link = document.getElementById('login-spotify-link');
                     var text = document.getElementById('login-spotify-text');
                     var wrapper = document.getElementById('spotify-login-wrapper');
+                    var fbWarning = document.getElementById('facebook-login-warning');
                     if (!link || !text || !wrapper) return;
 
                     var existingAgain = document.getElementById('spotify-login-again');
                     if (existingAgain) existingAgain.remove();
 
-                    if (data && data.loggedIn) {
-                        text.textContent = 'Conectado con Spotify';
-                        link.classList.add('opacity-90');
+                    if (data.loggedIn) {
+                        link.classList.replace('bg-spotify-green', 'bg-slate-100');
+                        link.classList.replace('text-white', 'text-slate-600');
+                        text.textContent = 'Conectado';
+                        link.removeAttribute('href');
+                        link.style.pointerEvents = 'none';
+                        if (fbWarning) fbWarning.classList.add('hidden');
+
                         var again = document.createElement('a');
                         again.id = 'spotify-login-again';
                         again.href = '/login/spotify';
