@@ -97,7 +97,8 @@ app.get('/login/spotify', (req, res) => { /* ... (código sin cambios) ... */
     const state = crypto.randomBytes(16).toString('hex'); req.session.oauthState = state; console.log('Generado state Spotify:', state); console.log('-> Spotify Auth');
     req.session.save((err) => {
         if (err) console.error('Error guardando state inicial:', err);
-        res.redirect(spotifyApi.createAuthorizeURL(spotifyScopes, state));
+        // Force show_dialog to true to prevent auto-login
+        res.redirect(spotifyApi.createAuthorizeURL(spotifyScopes, state, { show_dialog: true }));
     });
 });
 app.get('/callback/spotify', async (req, res) => { /* ... (código sin cambios) ... */
