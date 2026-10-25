@@ -1,0 +1,20 @@
+# Copia este archivo como .dev.vars para desarrollo local (npm run dev).
+# En producción, estas variables se configuran en Cloudflare Pages
+# (Settings → Variables and Secrets).
+
+# Client ID de tu app en https://developer.spotify.com/dashboard
+# (con PKCE NO se usa el Client Secret)
+SPOTIFY_CLIENT_ID=tu_client_id
+
+# Opcional: activa la lectura de fotos con Gemini (https://aistudio.google.com/)
+# GEMINI_API_KEY=tu_api_key
+# Opcional: modelo a usar primero (si no existe, se prueban gemini-3.1-flash-lite,
+# gemini-3.1-flash-lite-preview y gemini-2.5-flash-lite en ese orden)
+# GEMINI_MODEL=
+
+# Opcional: límites diarios del OCR (por defecto 12 por usuario, 200 en total)
+# OCR_USER_DAILY=12
+# OCR_GLOBAL_DAILY=200
+
+# Opcional: solo estos usuarios de Spotify (IDs separados por coma) pueden usar el OCR
+# ALLOWED_SPOTIFY_USERS=

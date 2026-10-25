@@ -1,20 +1,21 @@
 {
-  "scripts": {
-    "build:css": "tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --minify",
-    "dev:css": "tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --watch"
+  "name": "setsnap",
+  "private": true,
+  "type": "module",
+  "description": "Convierte setlists (texto o foto) en playlists de Spotify.",
+  "engines": {
+    "node": ">=20"
   },
-  "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^5.1.0",
-    "express-session": "^1.18.1",
-    "multer": "^1.4.5-lts.1",
-    "session-file-store": "^1.5.0",
-    "spotify-web-api-node": "^5.0.2",
-    "string-similarity": "^4.0.4"
+  "scripts": {
+    "build": "npm run build:css",
+    "build:css": "tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --minify",
+    "dev:css": "tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --watch",
+    "dev": "npm run build:css && wrangler pages dev public --kv RATE_LIMIT_KV --ip 127.0.0.1 --port 8788",
+    "start": "npm run dev",
+    "test": "node --test test/*.test.js"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.0"
+    "tailwindcss": "^3.4.0",
+    "wrangler": "^4.0.0"
   }
 }

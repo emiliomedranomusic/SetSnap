@@ -1,3 +1,101 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    overflow: hidden;
+    width: 1em;
+  }
+}
+
+@layer components {
+  .custom-shadow {
+    box-shadow: 0 4px 20px -2px rgb(0 0 0 / 0.05);
+  }
+
+  .segment {
+    @apply cursor-pointer;
+  }
+  .segment span {
+    @apply block text-center text-sm font-semibold text-slate-500 rounded-full px-3 py-2.5 transition;
+  }
+  .segment input:checked + span {
+    @apply bg-white text-slate-900 shadow-sm;
+  }
+  .segment input:focus-visible + span {
+    @apply ring-2 ring-primary/40;
+  }
+
+  .chip-button {
+    @apply inline-flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition;
+  }
+
+  .row-button {
+    @apply inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition;
+  }
+}
+
+#print-sheet {
+  display: none;
+}
+
+@media print {
+  body > *:not(#print-sheet) {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  #print-sheet {
+    display: block !important;
+    color: #000;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  #print-sheet h1 {
+    font-size: 22pt;
+    font-weight: 700;
+    margin-bottom: 12pt;
+  }
+  #print-sheet ol {
+    list-style: none;
+    padding: 0;
+  }
+  #print-sheet li {
+    display: flex;
+    gap: 10pt;
+    align-items: baseline;
+    font-size: 18pt;
+    padding: 5pt 0;
+    border-bottom: 1px solid #ddd;
+    break-inside: avoid;
+  }
+  #print-sheet .num {
+    width: 28pt;
+    color: #666;
+    text-align: right;
+  }
+  #print-sheet .artist {
+    color: #555;
+    font-size: 13pt;
+  }
+  #print-sheet .note {
+    margin-left: auto;
+    font-weight: 700;
+    font-size: 16pt;
+    border: 1.5px solid #000;
+    border-radius: 6pt;
+    padding: 0 6pt;
+  }
+}
