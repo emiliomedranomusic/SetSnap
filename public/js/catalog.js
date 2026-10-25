@@ -643,17 +643,29 @@ const RAW = [
 
 export const GENRES = ['pop', 'rock', 'balada', 'disco', 'jazz', 'salsa', 'cumbia', 'bachata', 'merengue', 'tropical', 'urbano', 'regional', 'bolero', 'country'];
 
-/** [{ title, artist, lang, genre, energy, romantic, anthem, seasonal }] */
-export const CATALOG = RAW.map((line) => {
-    const [title, artist, lang, genre, energy, flags = ''] = line.split('|');
+/** "Título|Artista|es|pop|3|rs" → { title, artist, lang, genre, energy, romantic, anthem, seasonal } (o null si no es válida). */
+export function parseCatalogLine(line) {
+    const [title, artist = '', lang, genre, energy, flags = ''] = String(line || '').split('|');
+    const e = Number(energy);
+    if (!title || !['es', 'en'].includes(lang) || !GENRES.includes(genre) || !(e >= 1 && e <= 5)) return null;
     return {
         title,
         artist,
         lang,
         genre,
-        energy: Number(energy),
+        energy: Math.round(e),
         romantic: flags.includes('r'),
         anthem: flags.includes('s'),
         seasonal: flags.includes('x'),
     };
-});
+}
+
+/** Canción + etiquetas → línea del catálogo. */
+export function catalogLine({ title, artist }, tags) {
+    const clean = (v) => String(v || '').replace(/\|/g, '/').trim();
+    const flags = `${tags.romantic ? 'r' : ''}${tags.anthem ? 's' : ''}${tags.seasonal ? 'x' : ''}`;
+    return [clean(title), clean(artist), tags.lang, tags.genre, tags.energy, flags].join('|');
+}
+
+/** [{ title, artist, lang, genre, energy, romantic, anthem, seasonal }] */
+export const CATALOG = RAW.map(parseCatalogLine);

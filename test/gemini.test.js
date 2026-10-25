@@ -103,3 +103,32 @@ test('si el modelo rechaza la config de thinking, reintenta sin ella', async () 
     assert.ok(bodies[0].generationConfig.thinkingConfig);
     assert.equal(bodies[1].generationConfig.thinkingConfig, undefined);
 });
+
+import { buildTagRequest, parseTagResponse, tagSongs } from '../lib/gemini.js';
+
+test('etiquetado: pide JSON con géneros cerrados y lee por índice', () => {
+    const req = buildTagRequest([{ title: 'Creep', artist: 'Radiohead' }, { title: 'La Bamba', artist: '' }], 'gemini-3.5-flash-lite');
+    assert.match(req.contents[0].parts[0].text, /1\. Creep - Radiohead\n2\. La Bamba/);
+    assert.deepEqual(req.generationConfig.responseSchema.properties.items.items.properties.genre.enum.slice(0, 3), ['pop', 'rock', 'balada']);
+    const tags = parseTagResponse(reply({ items: [
+        { i: 2, lang: 'es', genre: 'rock', energy: 5, anthem: true },
+        { i: 1, lang: 'en', genre: 'rock', energy: 2.4 },
+        { i: 9, lang: 'en', genre: 'pop', energy: 3 },
+        { i: 3, lang: 'fr', genre: 'pop', energy: 3 },
+    ] }), 3);
+    assert.deepEqual(tags[0], { lang: 'en', genre: 'rock', energy: 2, romantic: false, anthem: false, seasonal: false });
+    assert.equal(tags[1].anthem, true);
+    assert.equal(tags[2], null, 'idioma inválido se descarta');
+});
+
+test('etiquetado con respaldo de modelos', async () => {
+    let n = 0;
+    const fetchFn = async () => {
+        n++;
+        if (n === 1) return Response.json({ error: { message: 'nope' } }, { status: 404 });
+        return Response.json(reply({ items: [{ i: 1, lang: 'es', genre: 'salsa', energy: 4 }] }));
+    };
+    const res = await tagSongs([{ title: 'Vivir Mi Vida', artist: 'Marc Anthony' }], { apiKey: 'k', fetchFn });
+    assert.equal(res.tags[0].genre, 'salsa');
+    assert.equal(n, 2);
+});

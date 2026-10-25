@@ -442,6 +442,32 @@ async function generatorLib() {
     return generatorModule;
 }
 
+let fullCatalog = null;
+
+/** Catálogo base + canciones agregadas por el administrador (ya etiquetadas). */
+async function generatorCatalog() {
+    if (fullCatalog) return fullCatalog;
+    const { CATALOG, parseCatalogLine } = await import('./catalog.js');
+    const seen = new Set(CATALOG.map((s) => `${s.title}|${s.artist}`.toLowerCase()));
+    const extra = [];
+    try {
+        const res = await fetch('/api/catalog');
+        const data = res.ok ? await res.json() : null;
+        for (const line of data?.songs || []) {
+            const song = parseCatalogLine(line);
+            const id = song && `${song.title}|${song.artist}`.toLowerCase();
+            if (song && !seen.has(id)) {
+                seen.add(id);
+                extra.push(song);
+            }
+        }
+    } catch {
+        // Sin conexión o sin funciones: solo el catálogo base.
+    }
+    fullCatalog = [...CATALOG, ...extra];
+    return fullCatalog;
+}
+
 function genEvent() {
     return radioValue('gen-event') || 'wedding';
 }
@@ -519,7 +545,7 @@ async function runGenerator({ again = false } = {}) {
     gen.seed = again ? gen.seed + 1 : Date.now() % 1_000_000;
     const event = genEvent();
     const size = Number(els.genSize.value) || 30;
-    const result = lib.generateSetlist({ event, langs: genLangs(), genres, size, seed: gen.seed });
+    const result = lib.generateSetlist({ event, langs: genLangs(), genres, size, seed: gen.seed, catalog: await generatorCatalog() });
     const text = lib.setlistText(result, sectionName);
     els.textarea.value = text;
     gen.lastText = text;
@@ -604,7 +630,12 @@ async function adminCompareSeed() {
         const list = data.added.length
             ? `<details class="mt-2 text-left text-xs font-normal"><summary>${esc(t('admin.newOnes'))} ${data.added.length}</summary><ul class="mt-1 list-disc pl-5">${data.added.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></details>`
             : '';
-        setStatus(esc(t('admin.result', { added: data.added.length, already: data.already })) + list, 'ok');
+        const tagInfo = [
+            data.tagged ? t('admin.tagged', { n: data.tagged }) : '',
+            data.pendingTags ? (data.tagError === 'no-gemini' ? t('admin.noGemini', { n: data.pendingTags }) : t('admin.tagPending', { n: data.pendingTags })) : '',
+        ].filter(Boolean).join(' ');
+        fullCatalog = null; // el generador vuelve a leer el catálogo con las nuevas
+        setStatus(esc(`${t('admin.result', { added: data.added.length, already: data.already })} ${tagInfo}`.trim()) + list, 'ok');
     } catch (err) {
         handleError(err);
     }

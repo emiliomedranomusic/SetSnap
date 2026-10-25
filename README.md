@@ -12,6 +12,7 @@ Convierte el setlist que te mandaron (texto de WhatsApp, lista impresa o foto es
 - **Playlist nueva o existente**, sin repetir canciones que ya estén.
 - **Para la banda:** link para compartir el setlist (no necesitan cuenta, el setlist va dentro del link), copiar como texto e imprimir / guardar como PDF en letra grande con el tono de cada canción.
 - **Lista en YouTube sin login.** Arma una lista de YouTube con los videos del setlist (sin cuenta). Cada canción se busca una sola vez y queda en caché para todos, para siempre; ~600 éxitos en inglés y español se precargan solos.
+- **Tus canciones en el generador:** las que agregas desde tu playlist con "Comparar con la precarga" se etiquetan solas con Gemini (idioma, género, energía, románticas, himnos) y entran al generador.
 - **Generador de setlists por evento:** eliges boda, fiesta, restaurante/bar o corporativo, idioma (español, inglés o ambos), géneros y duración, y arma el setlist por momentos (p. ej. ceremonia → cóctel y cena → baile que sube → cierre con himnos), sin repetir artista seguido. Sale de un catálogo etiquetado de ~600 canciones (`public/js/catalog.js`); "Otra versión" baraja de nuevo.
 - **Acordes de cada canción** en Cifra Club, Ultimate Guitar, La Cuerda, MuseScore, Songsterr o iReal Pro (eliges los sitios). Son links de búsqueda: sin APIs ni costo. También aparecen en el setlist compartido, para que cada músico los abra.
 - **BPM y tonalidad de cada canción** (de la grabación original), con ReccoBeats y GetSongBPM de respaldo. Salen en la revisión, el setlist compartido, la hoja impresa, el texto copiado y el CSV. Cada canción se consulta una sola vez y queda en caché para todos.
@@ -41,7 +42,10 @@ functions/              Cloudflare Pages Functions (lo único con servidor)
   api/youtube.js        Lista de YouTube sin login
   share-target.js       Respaldo de "Compartir" si el service worker no está activo
 lib/gemini.js           Llamada a Gemini (REST, sin SDK)
-  api/admin/seed.js     Precarga de la caché de YouTube (administrador)
+  api/admin/seed.js     Precarga de la caché de YouTube y canciones propias (administrador)
+  api/admin/health.js   Diagnóstico en vivo de cada integración (administrador)
+  api/catalog.js        Canciones propias ya etiquetadas, para el generador
+  api/features.js       BPM y tonalidad (ReccoBeats / GetSongBPM)
 lib/server/             Cuenta central, YouTube, precarga y utilidades (KV, límites)
 public/js/catalog.js    Catálogo etiquetado (idioma, género, energía, románticas, himnos)
 public/js/generator.js  Generador de setlists por evento
@@ -145,4 +149,4 @@ Cubren el parser (WhatsApp, numeración, tonos, español), el scoring (acentos, 
 
 ## Despliegue
 
-Ver [GUIA_DESPLIEGUE.md](GUIA_DESPLIEGUE.md) (Cloudflare Pages, gratis y sin "dormirse").
+Ver [GUIA_DESPLIEGUE.md](GUIA_DESPLIEGUE.md): checklist completo para publicar en Cloudflare Pages y probar todo. Después de desplegar, `https://TU-URL/api/admin/health?key=TU_ADMIN_KEY` prueba en vivo cada integración.

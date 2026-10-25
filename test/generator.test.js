@@ -89,3 +89,11 @@ test('el texto generado se busca bien: los encabezados se ignoran', () => {
     assert.equal(items.length, 15);
     assert.ok(items.every((i) => i.artist));
 });
+
+test('las canciones agregadas (etiquetadas) entran al generador', async () => {
+    const { parseCatalogLine } = await import('../public/js/catalog.js');
+    const mine = ['Mi Canción|Mi Banda|es|cumbia|5|s', 'Otra Mía|Mi Banda 2|es|cumbia|5|'].map(parseCatalogLine);
+    const r = generateSetlist({ event: 'party', langs: ['es'], genres: ['cumbia'], size: 30, seed: 1, catalog: [...CATALOG, ...mine] });
+    const titles = r.sections.flatMap((s) => s.songs.map((x) => x.title));
+    assert.ok(titles.includes('Mi Canción') && titles.includes('Otra Mía'));
+});

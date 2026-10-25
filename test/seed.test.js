@@ -73,3 +73,43 @@ test('se pueden agregar canciones a la lista', async () => {
     const after = await (await status({ request: req('https://x/api/admin/seed', { headers: auth }), env })).json();
     assert.equal(after.total, before.total + 1, 'los repetidos no se duplican');
 });
+
+import { onRequestGet as catalog } from '../functions/api/catalog.js';
+
+test('las canciones agregadas se etiquetan con Gemini y llegan al catálogo del generador', async () => {
+    env.GEMINI_API_KEY = 'g';
+    const m = mockFetch([['https://generativelanguage.googleapis.com/', (url, init) => {
+        const text = JSON.parse(init.body).contents[0].parts[0].text;
+        assert.match(text, /1\. Canción Rara - Grupo Local/);
+        return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ items: [
+            { i: 1, lang: 'es', genre: 'cumbia', energy: 4, anthem: true },
+            { i: 2, lang: 'en', genre: 'pop', energy: 2, romantic: true },
+        ] }) }] } }] });
+    }]]);
+    try {
+        const res = await (await seed({ request: req('https://x/api/admin/seed', { method: 'POST', headers: auth, body: { add: ['Canción Rara - Grupo Local', 'Otra Nueva - Artista Uno, Artista Dos', 'Perfect - Ed Sheeran'] } }), env })).json();
+        assert.equal(res.added.length, 2);
+        assert.equal(res.tagged, 2);
+        assert.equal(res.pendingTags, 0);
+        const data = await (await catalog({ env })).json();
+        assert.deepEqual(data.songs.sort(), ['Canción Rara|Grupo Local|es|cumbia|4|s', 'Otra Nueva|Artista Uno, Artista Dos|en|pop|2|r']);
+    } finally {
+        m.restore();
+    }
+});
+
+test('sin Gemini quedan pendientes y se etiquetan después', async () => {
+    const r1 = await (await seed({ request: req('https://x/api/admin/seed', { method: 'POST', headers: auth, body: { add: ['Canción Rara - Grupo Local'] } }), env })).json();
+    assert.equal(r1.pendingTags, 1);
+    assert.equal(r1.tagError, 'no-gemini');
+    env.GEMINI_API_KEY = 'g';
+    const m = mockFetch([['https://generativelanguage.googleapis.com/', () => Response.json({ candidates: [{ content: { parts: [{ text: '{"items":[{"i":1,"lang":"es","genre":"cumbia","energy":4}]}' }] } }] })]]);
+    try {
+        // Volver a mandar (aunque no haya nuevas) etiqueta lo pendiente.
+        const r2 = await (await seed({ request: req('https://x/api/admin/seed', { method: 'POST', headers: auth, body: { add: [] } }), env })).json();
+        assert.equal(r2.tagged, 1);
+        assert.equal(r2.pendingTags, 0);
+    } finally {
+        m.restore();
+    }
+});
