@@ -223,12 +223,39 @@ export async function getPlaylistUris(playlistId) {
     for (let page = 0; url && page < 40; page++) {
         const data = await api(url);
         for (const it of data?.items || []) {
-            const t = it?.item || it?.track;
-            if (t?.uri) uris.add(t.uri);
+            const entry = it?.item || it?.track;
+            if (entry?.uri) uris.add(entry.uri);
         }
         url = data?.next || null;
     }
     return uris;
+}
+
+/** ID de playlist en un link de Spotify ("open.spotify.com/playlist/ID" o "spotify:playlist:ID"). */
+export function playlistIdFromText(text) {
+    const m = String(text || '').trim().match(/^(?:https?:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?playlist\/|spotify:playlist:)([A-Za-z0-9]{22})\S*$/);
+    return m ? m[1] : null;
+}
+
+/**
+ * Canciones de una playlist como { name, songs: [{ title, artist }] }.
+ * Desde 2026 Spotify solo deja leer playlists propias o colaborativas.
+ */
+export async function getPlaylistSongs(playlistId) {
+    const id = encodeURIComponent(playlistId);
+    const meta = await api(`/playlists/${id}?fields=name`).catch(() => null);
+    const songs = [];
+    let url = `/playlists/${id}/items?limit=50`;
+    for (let page = 0; url && page < 40; page++) {
+        const data = await api(url);
+        for (const it of data?.items || []) {
+            const entry = it?.item || it?.track;
+            if (!entry?.name || entry.type === 'episode') continue;
+            songs.push({ title: entry.name, artist: (entry.artists || []).map((a) => a.name).join(', ') });
+        }
+        url = data?.next || null;
+    }
+    return { name: meta?.name || '', songs };
 }
 
 export async function createPlaylist({ name, description, isPublic }) {

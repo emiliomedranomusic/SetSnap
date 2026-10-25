@@ -59,8 +59,17 @@ test('procesa bloques, guarda el avance y respeta la reserva para usuarios', asy
 
 test('se pueden agregar canciones a la lista', async () => {
     const before = await (await status({ request: req('https://x/api/admin/seed', { headers: auth }), env })).json();
-    const res = await (await seed({ request: req('https://x/api/admin/seed', { method: 'POST', headers: auth, body: { add: ['Canción Nueva - Banda X', 'Perfect - Ed Sheeran'] } }), env })).json();
-    assert.equal(res.extra, 2);
+    const res = await (await seed({
+        request: req('https://x/api/admin/seed', {
+            method: 'POST',
+            headers: auth,
+            // Formatos distintos de canciones que ya están en la lista
+            body: { add: ['Canción Nueva - Banda X', 'Perfect - Ed Sheeran', 'BÉSAME MUCHO - Luis Miguel', 'Hotel California - 2013 Remaster - Eagles', 'Despacito - Luis Fonsi, Daddy Yankee'] },
+        }),
+        env,
+    })).json();
+    assert.deepEqual(res.added, ['Canción Nueva - Banda X']);
+    assert.equal(res.already, 4);
     const after = await (await status({ request: req('https://x/api/admin/seed', { headers: auth }), env })).json();
     assert.equal(after.total, before.total + 1, 'los repetidos no se duplican');
 });

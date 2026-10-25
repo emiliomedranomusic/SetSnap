@@ -27,7 +27,7 @@ export async function onRequestPost({ request, env }) {
     if (!env.YOUTUBE_API_KEY && !env.ODESLI_API_KEY) return json(503, { success: false, message: 'YouTube no está configurado.' });
     const body = await request.json().catch(() => ({}));
     if (Array.isArray(body?.add)) {
-        return json(200, { success: true, extra: await addSeedSongs(env, body.add) });
+        return json(200, { success: true, ...(await addSeedSongs(env, body.add.slice(0, 2000))) });
     }
     try {
         return json(200, { success: true, ...(await runSeedBatch(env)) });

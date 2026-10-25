@@ -13,6 +13,7 @@ export async function onRequestGet({ env }) {
             ocrEnabled,
             ocrGuests: ocrEnabled && env.OCR_GUESTS !== '0',
             youtubeEnabled: Boolean(env.YOUTUBE_API_KEY || env.ODESLI_API_KEY),
+            supportUrl: /^https:\/\//.test(env.SUPPORT_URL || '') ? env.SUPPORT_URL : null,
         },
         { headers: { 'Cache-Control': 'public, max-age=60' } }
     );

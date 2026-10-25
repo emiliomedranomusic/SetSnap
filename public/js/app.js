@@ -58,6 +58,8 @@ const els = {
     updateButton: $('update-button'),
     exampleButton: $('example-button'),
     clearButton: $('clear-button'),
+    adminSeedButton: $('admin-seed-button'),
+    supportLink: $('support-link'),
 };
 
 const state = {
@@ -283,10 +285,69 @@ async function loadPlaylists() {
     }
 }
 
+// ---------- playlist de Spotify como setlist ----------
+
+/** Si el texto es un link de playlist de Spotify, carga sus canciones. Devuelve true si lo era. */
+async function maybeLoadPlaylist() {
+    const id = spotify.playlistIdFromText(els.textarea.value);
+    if (!id) return false;
+    if (!spotify.isLoggedIn()) {
+        setStatus(esc(t('playlist.needLogin')), 'info');
+        return true;
+    }
+    setStatus(esc(t('playlist.loading')));
+    try {
+        const { name, songs } = await spotify.getPlaylistSongs(id);
+        els.textarea.value = songs.map((x) => `${cleanTrackName(x.title)} - ${x.artist}`).join('\n');
+        if (name && !els.name.value.trim()) els.name.value = name;
+        saveDraft();
+        updateLineCount();
+        setStatus(esc(t('playlist.loaded', { n: songs.length, name: name || 'Spotify' })), 'ok');
+    } catch (err) {
+        if (err.status === 403 || err.status === 404) setStatus(esc(t('playlist.forbidden')), 'error');
+        else handleError(err);
+    }
+    return true;
+}
+
+// ---------- administrador: comparar con la precarga ----------
+
+async function adminCompareSeed() {
+    const lines = els.textarea.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) return;
+    let key = store.get('adminKey');
+    if (!key) {
+        key = window.prompt(t('admin.keyPrompt')) || '';
+        if (!key) return;
+    }
+    try {
+        const res = await fetch('/api/admin/seed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+            body: JSON.stringify({ add: lines }),
+        });
+        if (res.status === 403) {
+            store.set('adminKey', '');
+            setStatus(esc(t('admin.denied')), 'error');
+            return;
+        }
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || t('server.error', { status: res.status }));
+        store.set('adminKey', key);
+        const list = data.added.length
+            ? `<details class="mt-2 text-left text-xs font-normal"><summary>${esc(t('admin.newOnes'))} ${data.added.length}</summary><ul class="mt-1 list-disc pl-5">${data.added.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></details>`
+            : '';
+        setStatus(esc(t('admin.result', { added: data.added.length, already: data.already })) + list, 'ok');
+    } catch (err) {
+        handleError(err);
+    }
+}
+
 // ---------- búsqueda ----------
 
 async function doSearch() {
     if (state.busy) return;
+    if (await maybeLoadPlaylist()) return;
     const items = parseSetlist(els.textarea.value);
     if (!items.length) {
         setStatus(esc(t('status.needText')), 'error');
@@ -1005,7 +1066,9 @@ function bindEvents() {
     els.textarea.addEventListener('input', () => {
         updateLineCount();
         saveDraft();
+        if (spotify.playlistIdFromText(els.textarea.value)) maybeLoadPlaylist();
     });
+    els.adminSeedButton.addEventListener('click', adminCompareSeed);
     els.textarea.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
@@ -1169,6 +1232,17 @@ async function init() {
     if (!state.config.spotifyClientId) {
         setStatus(esc(t('status.missingClientId')), 'error');
     }
+
+    if (state.config.supportUrl) {
+        els.supportLink.href = state.config.supportUrl;
+        els.supportLink.classList.remove('hidden');
+        els.supportLink.classList.add('flex');
+    }
+    // /?admin activa en este dispositivo las herramientas del administrador
+    // (protegidas con ADMIN_KEY en el servidor); /?admin=0 las apaga.
+    const adminParam = new URLSearchParams(window.location.search).get('admin');
+    if (adminParam !== null) store.set('admin', adminParam === '0' ? '' : '1');
+    if (store.get('admin') === '1') els.adminSeedButton.classList.remove('hidden');
 
     renderAccount();
     applyUrlParams();
