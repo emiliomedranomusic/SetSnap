@@ -8,6 +8,8 @@
  * - búsqueda: limit máximo 10
  */
 
+import { t } from './i18n.js';
+
 const API = 'https://api.spotify.com/v1';
 const ACCOUNTS = 'https://accounts.spotify.com';
 const SCOPES = ['playlist-modify-public', 'playlist-modify-private', 'playlist-read-private'];
@@ -72,7 +74,7 @@ function randomString(length) {
 }
 
 export async function login() {
-    if (!clientId) throw new Error('Falta configurar SPOTIFY_CLIENT_ID.');
+    if (!clientId) throw new Error(t('status.missingClientId'));
     // Spotify solo acepta http en 127.0.0.1, no en "localhost".
     if (window.location.hostname === 'localhost') {
         window.location.hostname = '127.0.0.1';
@@ -103,7 +105,7 @@ async function tokenRequest(body) {
         body: new URLSearchParams({ client_id: clientId, ...body }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error_description || data.error || `Error de autenticación (${res.status})`);
+    if (!res.ok) throw new Error(data.error_description || data.error || t('spotify.authError', { status: res.status }));
     return data;
 }
 
@@ -121,8 +123,8 @@ export async function handleRedirect() {
     storage()?.removeItem(PKCE_KEY);
     window.history.replaceState({}, '', window.location.pathname + window.location.hash);
 
-    if (error) throw new Error(error === 'access_denied' ? 'Cancelaste el inicio de sesión en Spotify.' : `Spotify: ${error}`);
-    if (!pkce || params.get('state') !== pkce.state) throw new Error('El inicio de sesión expiró o no es válido. Intenta de nuevo.');
+    if (error) throw new Error(error === 'access_denied' ? t('spotify.cancelled') : `Spotify: ${error}`);
+    if (!pkce || params.get('state') !== pkce.state) throw new Error(t('spotify.badState'));
 
     const data = await tokenRequest({
         grant_type: 'authorization_code',
@@ -138,17 +140,17 @@ let refreshing = null;
 
 async function getAccessToken() {
     const token = readToken();
-    if (!token) throw Object.assign(new Error('Conecta tu cuenta de Spotify.'), { needsLogin: true });
+    if (!token) throw Object.assign(new Error(t('status.needLogin')), { needsLogin: true });
     if (Date.now() < token.expiresAt - 60_000) return token.accessToken;
     if (!token.refreshToken) {
         logout();
-        throw Object.assign(new Error('Tu sesión de Spotify expiró. Conéctate de nuevo.'), { needsLogin: true });
+        throw Object.assign(new Error(t('spotify.expired')), { needsLogin: true });
     }
     refreshing ||= tokenRequest({ grant_type: 'refresh_token', refresh_token: token.refreshToken })
         .then((data) => saveToken(data, token).accessToken)
         .catch(() => {
             logout();
-            throw Object.assign(new Error('Tu sesión de Spotify expiró. Conéctate de nuevo.'), { needsLogin: true });
+            throw Object.assign(new Error(t('spotify.expired')), { needsLogin: true });
         })
         .finally(() => { refreshing = null; });
     return refreshing;
@@ -160,13 +162,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function describeError(status, data) {
     const msg = data?.error?.message || data?.error_description || '';
-    if (status === 401) return 'Tu sesión de Spotify expiró. Conéctate de nuevo.';
-    if (status === 403) {
-        return 'Spotify rechazó la petición (403). Si la app está en "Development Mode", tu cuenta debe estar agregada en '
-            + 'User Management del Dashboard y el dueño de la app necesita Spotify Premium.' + (msg ? ` Detalle: ${msg}` : '');
-    }
-    if (status === 429) return 'Spotify está limitando las peticiones. Espera un momento e intenta de nuevo.';
-    return `Error de Spotify (${status})${msg ? `: ${msg}` : ''}`;
+    if (status === 401) return t('spotify.expired');
+    if (status === 403) return t('spotify.forbidden') + (msg ? ` (${msg})` : '');
+    if (status === 429) return t('spotify.rateLimited');
+    return t('spotify.error', { status }) + (msg ? `: ${msg}` : '');
 }
 
 async function api(path, { method = 'GET', body, retries = 2 } = {}) {

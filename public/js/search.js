@@ -15,6 +15,8 @@ export function buildQueries(item) {
     const t = item.title.trim();
     const a = (item.artist || '').trim();
     if (!a) return [t, `track:${quote(t)}`];
+    // "Creep by Radiohead" o "Stand by Me": la línea completa sirve para ambos casos.
+    if (item.whole) return [item.whole, `track:${quote(t)} artist:${quote(a)}`, `track:${quote(item.whole)}`];
     const queries = [`${t} ${a}`, `track:${quote(t)} artist:${quote(a)}`];
     if (!item.ordered) queries.push(`track:${quote(a)} artist:${quote(t)}`);
     queries.push(t);

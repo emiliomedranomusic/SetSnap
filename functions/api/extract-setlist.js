@@ -7,7 +7,7 @@
  * que el costo de Gemini tenga techo; imágenes repetidas salen de caché.
  */
 import { extractSetlistFromImage } from '../../lib/gemini.js';
-import { kvStore, safePut, json, clientIp, today, sha256Hex, dailyLimits, intEnv } from '../../lib/server/common.js';
+import { kvStore, safePut, json, clientIp, today, sha256Hex, dailyLimits, intEnv, tr } from '../../lib/server/common.js';
 
 const MAX_BYTES = 6 * 1024 * 1024;
 const CACHE_TTL = 30 * 24 * 60 * 60;
@@ -23,31 +23,31 @@ async function spotifyUserId(request) {
 
 export async function onRequestPost({ request, env }) {
     if (!env.GEMINI_API_KEY) {
-        return json(503, { success: false, message: 'El OCR no está configurado (falta GEMINI_API_KEY).' });
+        return json(503, { success: false, message: tr(request, 'La lectura de fotos no está configurada (falta GEMINI_API_KEY).', 'Photo reading is not set up (missing GEMINI_API_KEY).') });
     }
 
     const userId = await spotifyUserId(request);
     const guestsAllowed = env.OCR_GUESTS !== '0';
     if (!userId && !guestsAllowed) {
-        return json(401, { success: false, needsLogin: true, message: 'Conecta tu cuenta de Spotify para usar el OCR.' });
+        return json(401, { success: false, needsLogin: true, message: tr(request, 'Conecta tu cuenta de Spotify para leer fotos.', 'Connect your Spotify account to read photos.') });
     }
     const allowed = (env.ALLOWED_SPOTIFY_USERS || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (userId && allowed.length && !allowed.includes(userId)) {
-        return json(403, { success: false, message: 'Tu cuenta no tiene acceso al OCR.' });
+        return json(403, { success: false, message: tr(request, 'Tu cuenta no tiene acceso a la lectura de fotos.', "Your account doesn't have access to photo reading.") });
     }
 
     let file;
     try {
         file = (await request.formData()).get('image');
     } catch {
-        return json(400, { success: false, message: 'Petición inválida.' });
+        return json(400, { success: false, message: tr(request, 'Petición inválida.', 'Invalid request.') });
     }
     if (!file || typeof file !== 'object' || !file.size) {
-        return json(400, { success: false, message: 'Falta la imagen.' });
+        return json(400, { success: false, message: tr(request, 'Falta la imagen.', 'Missing image.') });
     }
-    if (file.size > MAX_BYTES) return json(413, { success: false, message: 'La imagen es demasiado grande (máx. 6 MB).' });
+    if (file.size > MAX_BYTES) return json(413, { success: false, message: tr(request, 'La imagen es demasiado grande (máx. 6 MB).', 'The image is too large (max 6 MB).') });
     const mimeType = file.type || 'image/jpeg';
-    if (!mimeType.startsWith('image/')) return json(415, { success: false, message: 'El archivo debe ser una imagen.' });
+    if (!mimeType.startsWith('image/')) return json(415, { success: false, message: tr(request, 'El archivo debe ser una imagen.', 'The file must be an image.') });
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const kv = kvStore(env);
@@ -64,10 +64,10 @@ export async function onRequestPost({ request, env }) {
         { name: 'global', key: `ocr:g:${day}`, max: intEnv(env.OCR_GLOBAL_DAILY, 200) },
     ]);
     if (limits.exceeded === 'global') {
-        return json(429, { success: false, message: 'El OCR llegó a su límite diario. Intenta mañana o pega el texto.' });
+        return json(429, { success: false, message: tr(request, 'La lectura de fotos llegó a su límite diario. Intenta mañana o pega el texto.', 'Photo reading reached its daily limit. Try tomorrow or paste the text.') });
     }
     if (limits.exceeded) {
-        return json(429, { success: false, message: `Llegaste a tu límite de ${personal.max} fotos por día. Intenta mañana o pega el texto.` });
+        return json(429, { success: false, message: tr(request, `Llegaste a tu límite de ${personal.max} fotos por día. Intenta mañana o pega el texto.`, `You reached your limit of ${personal.max} photos per day. Try tomorrow or paste the text.`) });
     }
 
     // Se cuenta antes de llamar: Gemini cobra aunque la respuesta salga mal.
@@ -83,6 +83,6 @@ export async function onRequestPost({ request, env }) {
         return json(200, { success: true, items, remaining: Math.max(0, limits.remaining('person') - 1) });
     } catch (err) {
         console.error('[ocr] error', err.message);
-        return json(502, { success: false, message: err.message || 'No se pudo procesar la imagen.' });
+        return json(502, { success: false, message: tr(request, err.message || 'No se pudo procesar la imagen.', "Couldn't read the image. Try a sharper photo or paste the text.") });
     }
 }

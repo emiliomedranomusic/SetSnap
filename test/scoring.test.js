@@ -33,6 +33,15 @@ test('detecta "Artista - Canción" invertido', () => {
     assert.ok(s.score >= 85, `score ${s.score}`);
 });
 
+test('"Stand by Me" y "Loco por ti" no se parten en título y artista', () => {
+    const stand = parseLine('Stand by Me');
+    assert.equal(scoreTrack(stand, track('Stand by Me', ['Ben E. King'])).score, 100);
+    assert.ok(scoreTrack(parseLine('Loco por ti'), track('Loco Por Ti', ['Los Rehenes'])).score >= 85);
+    // y "Creep by Radiohead" sigue funcionando como canción + artista
+    assert.ok(scoreTrack(parseLine('Creep by Radiohead'), track('Creep', ['Radiohead'])).score >= 85);
+    assert.deepEqual(buildQueries(parseLine('Stand by Me'))[0], 'Stand by Me');
+});
+
 test('"by" no se invierte', () => {
     const item = parseLine('Creep by Radiohead');
     assert.equal(scoreTrack(item, track('Creep', ['Radiohead'])).flipped, false);
@@ -88,6 +97,7 @@ test('umbrales', () => {
 test('consultas: ambas orientaciones solo si no hay "by"', () => {
     assert.equal(buildQueries(parseLine('A - B')).length, 4);
     assert.equal(buildQueries(parseLine('A by B')).length, 3);
+    assert.equal(buildQueries(parseLine('A by B'))[0], 'A by B');
     assert.deepEqual(buildQueries(parseLine('Creep')), ['Creep', 'track:"Creep"']);
 });
 

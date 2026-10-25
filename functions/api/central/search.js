@@ -5,7 +5,7 @@
  * buscó lo mismo, no se vuelve a llamar a Spotify.
  */
 import { centralApi, slimTrack, CentralError } from '../../../lib/server/central.js';
-import { json, clientIp } from '../../../lib/server/common.js';
+import { json, clientIp, tr } from '../../../lib/server/common.js';
 
 const CACHE_SECONDS = 7 * 24 * 60 * 60;
 // Límite por IP en memoria (por isolate): frena abusos sin gastar escrituras
@@ -36,9 +36,9 @@ function edgeCache() {
 export async function onRequestGet({ request, env }) {
     const url = new URL(request.url);
     const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
-    if (!q) return json(400, { success: false, message: 'Falta la búsqueda.' });
+    if (!q) return json(400, { success: false, message: tr(request, 'Falta la búsqueda.', 'Missing search query.') });
     if (overLimit(clientIp(request))) {
-        return json(429, { success: false, message: 'Demasiadas búsquedas seguidas. Espera unos minutos.' }, { 'Retry-After': '60' });
+        return json(429, { success: false, message: tr(request, 'Demasiadas búsquedas seguidas. Espera unos minutos.', 'Too many searches in a row. Wait a few minutes.') }, { 'Retry-After': '60' });
     }
 
     const country = request.cf?.country;
@@ -52,12 +52,12 @@ export async function onRequestGet({ request, env }) {
         const params = new URLSearchParams({ q, type: 'track', limit: '10', market });
         const res = await centralApi(env, `/search?${params}`);
         if (res.status === 429) {
-            return json(429, { success: false, message: 'Hay mucha gente buscando. Espera unos segundos.' }, { 'Retry-After': res.headers.get('Retry-After') || '2' });
+            return json(429, { success: false, message: tr(request, 'Hay mucha gente buscando. Espera unos segundos.', 'Lots of people are searching. Wait a few seconds.') }, { 'Retry-After': res.headers.get('Retry-After') || '2' });
         }
         const data = await res.json().catch(() => null);
         if (!res.ok) {
             console.error('[central] search', res.status, data?.error?.message);
-            return json(502, { success: false, message: `Spotify respondió ${res.status}.` });
+            return json(502, { success: false, message: tr(request, `Spotify respondió ${res.status}.`, `Spotify answered ${res.status}.`) });
         }
         const response = Response.json(
             { success: true, tracks: (data?.tracks?.items || []).filter(Boolean).map(slimTrack) },
@@ -66,7 +66,7 @@ export async function onRequestGet({ request, env }) {
         if (cache) await cache.put(cacheKey, response.clone()).catch(() => {});
         return response;
     } catch (err) {
-        if (err instanceof CentralError) return json(err.status, { success: false, message: err.message });
+        if (err instanceof CentralError) return json(err.status, { success: false, message: tr(request, err.message, err.en) });
         throw err;
     }
 }

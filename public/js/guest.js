@@ -3,10 +3,12 @@
  * (a través de /api/central/*), sin que la persona inicie sesión.
  */
 
+import { t, langHeaders } from './i18n.js';
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function call(url, init, retries = 2) {
-    const res = await fetch(url, init);
+async function call(url, init = {}, retries = 2) {
+    const res = await fetch(url, { ...init, headers: { ...langHeaders(), ...(init.headers || {}) } });
     if (res.status === 429 && retries > 0) {
         const wait = Math.min(Number(res.headers.get('Retry-After') || 2), 10) * 1000;
         await sleep(wait);
@@ -14,7 +16,7 @@ async function call(url, init, retries = 2) {
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.success === false) {
-        throw Object.assign(new Error(data.message || `Error del servidor (${res.status})`), { status: res.status });
+        throw Object.assign(new Error(data.message || t('server.error', { status: res.status })), { status: res.status });
     }
     return data;
 }

@@ -1,4 +1,5 @@
 import { getAccessToken, isLoggedIn } from './spotify.js';
+import { t, langHeaders } from './i18n.js';
 
 const MAX_SIDE = 1600;
 const JPEG_QUALITY = 0.85;
@@ -44,12 +45,12 @@ export async function extractSetlistText(file) {
 
     const res = await fetch('/api/extract-setlist', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { ...langHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: form,
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.success) {
-        throw new Error(data.message || `No se pudo leer la imagen (${res.status}).`);
+        throw new Error(data.message || t('ocr.failed', { status: res.status }));
     }
     const lines = (data.items || [])
         .map((it) => {

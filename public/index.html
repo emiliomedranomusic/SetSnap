@@ -6,10 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SetSnap</title>
     <meta name="description" content="Pega o fotografía un setlist y conviértelo en una playlist de Spotify en segundos.">
+    <meta name="color-scheme" content="light dark">
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#f6f7f8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0a0f1c" media="(prefers-color-scheme: dark)">
+    <script>
+        // Tema antes de pintar (evita el parpadeo): sistema, claro u oscuro.
+        (function () {
+            var pref = 'system';
+            try { pref = localStorage.getItem('setsnap.theme') || 'system'; } catch (e) { }
+            var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.classList.toggle('dark', dark);
+            try {
+                var l = localStorage.getItem('setsnap.lang');
+                document.documentElement.lang = l || (/^en\b/i.test(navigator.language || '') ? 'en' : 'es');
+            } catch (e) { }
+        })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,15 +33,31 @@
 </head>
 
 <body class="bg-background-light min-h-screen text-slate-900 flex flex-col font-display antialiased">
+    <a href="#song-list" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 bg-surface text-slate-900 px-3 py-2 rounded-lg">Setlist</a>
+
+    <div id="offline-banner" class="hidden bg-amber-100 text-amber-800 text-xs text-center px-4 py-2" role="status" data-i18n="offline"></div>
+    <div id="update-banner" class="hidden bg-primary text-white text-xs px-4 py-2 items-center justify-center gap-3" role="status">
+        <span data-i18n="update.ready"></span>
+        <button type="button" id="update-button" class="underline font-semibold" data-i18n="update.reload"></button>
+    </div>
 
     <header class="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-6 pb-4 flex items-center justify-between gap-3">
         <a href="/" class="flex items-center gap-3 no-underline text-slate-900">
             <span class="bg-primary text-white w-10 h-10 rounded-full flex items-center justify-center">
-                <span class="material-symbols-outlined text-2xl">music_note</span>
+                <span class="material-symbols-outlined text-2xl" aria-hidden="true">music_note</span>
             </span>
             <span class="text-xl font-bold tracking-tight">SetSnap</span>
         </a>
-        <div id="account" class="flex items-center gap-2 text-sm"></div>
+        <div class="flex items-center gap-1.5 text-sm">
+            <div id="account" class="flex items-center gap-2"></div>
+            <button type="button" id="install-button" class="hidden icon-button" data-i18n-title="header.install" data-i18n-aria="header.install">
+                <span class="material-symbols-outlined text-xl" aria-hidden="true">install_mobile</span>
+            </button>
+            <button type="button" id="lang-button" class="icon-button font-semibold text-xs" data-i18n-title="header.lang" data-i18n-aria="header.lang">EN</button>
+            <button type="button" id="theme-button" class="icon-button" data-i18n-aria="header.theme">
+                <span class="material-symbols-outlined text-xl" aria-hidden="true" id="theme-icon">contrast</span>
+            </button>
+        </div>
     </header>
 
     <main class="flex-1 w-full max-w-2xl mx-auto px-4 pb-32">
@@ -35,54 +66,57 @@
         <section id="share-view" class="hidden"></section>
 
         <!-- Editor -->
-        <section id="editor" class="bg-white rounded-xl custom-shadow border border-slate-200 p-5 sm:p-8">
+        <section id="editor" class="bg-surface rounded-xl custom-shadow border border-slate-200 p-5 sm:p-8">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <label for="song-list" class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Setlist</label>
+                <label for="song-list" class="text-sm font-semibold text-slate-500 uppercase tracking-wider" data-i18n="editor.label">Setlist</label>
                 <div id="ocr-controls" class="hidden items-center gap-2">
                     <input type="file" id="image-input" accept="image/*" class="hidden">
                     <button type="button" id="photo-button"
                         class="flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 border border-primary/20 transition">
-                        <span class="material-symbols-outlined text-base">photo_camera</span>
-                        <span>Foto del setlist</span>
+                        <span class="material-symbols-outlined text-base" aria-hidden="true">photo_camera</span>
+                        <span data-i18n="editor.photo"></span>
                     </button>
                 </div>
             </div>
             <div id="drop-zone" class="relative">
-                <textarea id="song-list" spellcheck="false"
-                    class="w-full min-h-[180px] bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition resize-y text-sm leading-relaxed"
-                    placeholder="Pega aquí el setlist que te mandaron, una canción por línea.&#10;&#10;1. Creep - Radiohead&#10;2. Radiohead - Karma Police&#10;3. Amor de mis amores (en G)&#10;&#10;Da igual el orden canción/artista, la numeración o los mensajes de WhatsApp."></textarea>
+                <textarea id="song-list" spellcheck="false" data-i18n-placeholder="editor.placeholder"
+                    class="w-full min-h-[180px] bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition resize-y text-sm leading-relaxed"></textarea>
                 <div id="drop-overlay"
-                    class="hidden absolute inset-0 rounded-2xl border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center text-primary font-semibold text-sm">
-                    Suelta la imagen para leer el setlist
+                    class="hidden absolute inset-0 rounded-2xl border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center text-primary font-semibold text-sm" data-i18n="editor.drop">
                 </div>
             </div>
-            <div class="flex items-center justify-between gap-2 mt-2 min-h-[1.25rem]">
-                <p id="line-count" class="text-xs text-slate-500"></p>
-                <p id="ocr-hint" class="hidden text-xs text-slate-400 text-right">También puedes pegar una captura (Ctrl+V)</p>
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-2 min-h-[1.25rem]">
+                <div class="flex items-center gap-3">
+                    <p id="line-count" class="text-xs text-slate-500" aria-live="polite"></p>
+                    <button type="button" id="example-button" class="text-xs font-semibold text-primary hover:underline" data-i18n="editor.example"></button>
+                    <button type="button" id="clear-button" class="hidden text-xs font-semibold text-slate-500 hover:underline" data-i18n="editor.clear"></button>
+                </div>
+                <p class="text-xs text-slate-400 text-right">
+                    <span id="ocr-hint" class="hidden" data-i18n="editor.pasteHint"></span>
+                    <span class="hidden md:inline" data-i18n="editor.shortcut"></span>
+                </p>
             </div>
 
             <!-- Destino -->
             <fieldset class="mt-6">
-                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2">Destino</legend>
+                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2" data-i18n="dest.legend"></legend>
                 <div class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-full" role="radiogroup">
-                    <label class="segment"><input type="radio" name="destination" value="new" class="sr-only" checked><span>Playlist nueva</span></label>
-                    <label class="segment"><input type="radio" name="destination" value="existing" class="sr-only"><span>Agregar a una existente</span></label>
+                    <label class="segment"><input type="radio" name="destination" value="new" class="sr-only" checked><span data-i18n="dest.new"></span></label>
+                    <label class="segment"><input type="radio" name="destination" value="existing" class="sr-only"><span data-i18n="dest.existing"></span></label>
                 </div>
             </fieldset>
 
             <div id="new-playlist-fields" class="mt-4 space-y-4">
                 <div class="flex flex-col md:flex-row gap-4">
                     <div class="flex-1 flex flex-col gap-2">
-                        <label for="playlist-name" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Nombre</label>
-                        <input type="text" id="playlist-name" maxlength="100"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                            placeholder="Setlist - fecha de hoy">
+                        <label for="playlist-name" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1" data-i18n="name.label"></label>
+                        <input type="text" id="playlist-name" maxlength="100" data-i18n-placeholder="name.placeholder"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
                     </div>
                     <div class="flex-1 flex flex-col gap-2">
-                        <label for="playlist-description" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Descripción</label>
-                        <input type="text" id="playlist-description" maxlength="300"
-                            class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                            placeholder="Opcional">
+                        <label for="playlist-description" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1" data-i18n="desc.label"></label>
+                        <input type="text" id="playlist-description" maxlength="300" data-i18n-placeholder="desc.placeholder"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
                     </div>
                 </div>
                 <label id="public-toggle" class="flex items-center gap-3 cursor-pointer w-fit">
@@ -91,52 +125,48 @@
                         <span class="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 transition"></span>
                         <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition peer-checked:translate-x-5"></span>
                     </span>
-                    <span class="text-sm font-medium text-slate-700">Playlist pública</span>
+                    <span class="text-sm font-medium text-slate-700" data-i18n="public.label"></span>
                 </label>
             </div>
 
             <div id="existing-playlist-fields" class="hidden mt-4 space-y-3">
                 <div class="flex flex-col gap-2">
-                    <label for="existing-playlist" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Playlist</label>
+                    <label for="existing-playlist" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1" data-i18n="existing.label"></label>
                     <select id="existing-playlist"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none">
-                        <option value="">Conecta Spotify para ver tus playlists</option>
+                        class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none">
+                        <option value="" data-i18n="existing.connect"></option>
                     </select>
                 </div>
                 <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer w-fit">
                     <input type="checkbox" id="skip-existing" class="rounded border-slate-300 text-primary focus:ring-primary/30" checked>
-                    No repetir canciones que ya están en la playlist
+                    <span data-i18n="existing.skip"></span>
                 </label>
             </div>
 
             <!-- Modo -->
             <fieldset class="mt-6">
-                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2">Modo</legend>
+                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2" data-i18n="mode.legend"></legend>
                 <div class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-full" role="radiogroup">
-                    <label class="segment"><input type="radio" name="mode" value="review" class="sr-only" checked><span>Revisar (recomendado)</span></label>
-                    <label class="segment"><input type="radio" name="mode" value="auto" class="sr-only"><span>Crear directo</span></label>
+                    <label class="segment"><input type="radio" name="mode" value="review" class="sr-only" checked><span data-i18n="mode.review"></span></label>
+                    <label class="segment"><input type="radio" name="mode" value="auto" class="sr-only"><span data-i18n="mode.auto"></span></label>
                 </div>
                 <p id="mode-help" class="text-xs text-slate-500 mt-2 ml-1"></p>
             </fieldset>
 
             <div class="mt-6">
                 <button id="search-button" type="button"
-                    class="w-full h-14 bg-slate-900 text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
-                    <span class="material-symbols-outlined text-xl">search</span>
-                    <span id="search-label">Buscar canciones</span>
+                    class="w-full h-14 bg-slate-900 text-surface font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
+                    <span class="material-symbols-outlined text-xl" aria-hidden="true">search</span>
+                    <span id="search-label"></span>
                 </button>
-                <p id="guest-note" class="hidden text-xs text-slate-500 text-center mt-3 leading-relaxed">
-                    No necesitas cuenta: la playlist se crea en el perfil de SetSnap y te damos el link para guardarla o copiarla a tu Spotify.
-                </p>
+                <p id="guest-note" class="hidden text-xs text-slate-500 text-center mt-3 leading-relaxed" data-i18n="guest.note"></p>
                 <div id="login-box" class="hidden flex-col items-center">
                     <button id="login-button" type="button"
                         class="w-full h-14 bg-spotify-green text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition">
-                        <span class="material-symbols-outlined text-xl">link</span>
-                        <span>Conectar con Spotify</span>
+                        <span class="material-symbols-outlined text-xl" aria-hidden="true">link</span>
+                        <span data-i18n="login.button"></span>
                     </button>
-                    <p class="text-[11px] text-slate-400 mt-2 text-center leading-tight">
-                        Si instalaste la app, entra con tu email de Spotify: el inicio de sesión con <b>Facebook</b> puede fallar dentro de apps instaladas.
-                    </p>
+                    <p class="text-[11px] text-slate-400 mt-2 text-center leading-tight" data-i18n-html="login.fbNote"></p>
                 </div>
             </div>
         </section>
@@ -156,34 +186,35 @@
                 <div id="results-summary" class="flex flex-wrap gap-2 text-xs font-semibold"></div>
                 <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                     <input type="checkbox" id="only-pending" class="rounded border-slate-300 text-primary focus:ring-primary/30">
-                    Solo las que hay que revisar
+                    <span data-i18n="results.onlyPending"></span>
                 </label>
             </div>
             <div class="flex flex-wrap gap-2 mb-4 px-1">
-                <button type="button" data-action="share" class="chip-button"><span class="material-symbols-outlined text-base">group</span>Compartir con la banda</button>
-                <button type="button" data-action="copy-text" class="chip-button"><span class="material-symbols-outlined text-base">content_copy</span>Copiar como texto</button>
-                <button type="button" data-action="youtube" class="chip-button hidden"><span class="material-symbols-outlined text-base">smart_display</span>Lista en YouTube</button>
-                <button type="button" data-action="print" class="chip-button"><span class="material-symbols-outlined text-base">print</span>Imprimir / PDF</button>
-                <button type="button" data-action="reset" class="chip-button"><span class="material-symbols-outlined text-base">restart_alt</span>Empezar de nuevo</button>
+                <button type="button" data-action="share" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">group</span><span data-i18n="results.share"></span></button>
+                <button type="button" data-action="copy-text" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">content_copy</span><span data-i18n="results.copy"></span></button>
+                <button type="button" data-action="youtube" class="chip-button hidden"><span class="material-symbols-outlined text-base" aria-hidden="true">smart_display</span><span data-i18n="results.youtube"></span></button>
+                <button type="button" data-action="csv" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">download</span><span data-i18n="results.csv"></span></button>
+                <button type="button" data-action="print" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">print</span><span data-i18n="results.print"></span></button>
+                <button type="button" data-action="reset" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">restart_alt</span><span data-i18n="results.reset"></span></button>
             </div>
             <ol id="results-list" class="space-y-3"></ol>
         </section>
     </main>
 
     <!-- Barra fija para crear/agregar -->
-    <div id="commit-bar" class="hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div id="commit-bar" class="hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div class="max-w-2xl mx-auto flex items-center gap-3">
             <p id="commit-info" class="flex-1 text-xs text-slate-500"></p>
             <button id="commit-button" type="button"
                 class="h-12 px-6 bg-primary text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
-                <span class="material-symbols-outlined text-xl">playlist_add</span>
-                <span id="commit-label">Crear playlist</span>
+                <span class="material-symbols-outlined text-xl" aria-hidden="true">playlist_add</span>
+                <span id="commit-label"></span>
             </button>
         </div>
     </div>
 
     <footer class="text-center pb-28 px-4 text-slate-500/80">
-        <p class="text-xs">Usa la API oficial de Spotify. No estamos afiliados a Spotify.</p>
+        <p class="text-xs" data-i18n="footer"></p>
     </footer>
 
     <!-- Hoja para imprimir (solo visible al imprimir) -->

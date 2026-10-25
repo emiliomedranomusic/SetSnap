@@ -119,7 +119,11 @@ function scoreOriented(title, artist, track) {
 export function scoreTrack(item, track) {
     const title = item.title || '';
     const artist = item.artist || '';
-    const direct = scoreOriented(title, artist, track);
+    let direct = scoreOriented(title, artist, track);
+    if (item.whole) {
+        const asTitle = scoreOriented(item.whole, '', track);
+        if (asTitle.score > direct.score) direct = asTitle;
+    }
     if (!artist || item.ordered) return { ...direct, flipped: false };
     const flipped = scoreOriented(artist, title, track);
     return flipped.score > direct.score ? { ...flipped, flipped: true } : { ...direct, flipped: false };

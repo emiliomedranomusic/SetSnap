@@ -4,7 +4,7 @@
  * - Recibe "Compartir → SetSnap" (Web Share Target) desde WhatsApp, Fotos, etc.
  * Nunca intercepta llamadas a /api ni a Spotify/Google.
  */
-const VERSION = 'setsnap-v4';
+const VERSION = 'setsnap-v5';
 const SHARE_CACHE = 'setsnap-share';
 const SHELL = [
     '/',
@@ -15,6 +15,7 @@ const SHELL = [
     '/js/search.js',
     '/js/spotify.js',
     '/js/guest.js',
+    '/js/i18n.js',
     '/js/ocr.js',
     '/js/share.js',
     '/manifest.json',
@@ -23,7 +24,12 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-    event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+    // No se activa solo: la app muestra "Hay una versión nueva" y el usuario decide.
+    event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(SHELL)));
+});
+
+self.addEventListener('message', (event) => {
+    if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

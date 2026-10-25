@@ -53,7 +53,7 @@ export async function buildShareUrl(setlist) {
     return `${window.location.origin}/#s=${await encodeSetlist(setlist)}`;
 }
 
-export function setlistToText(setlist) {
+export function setlistToText(setlist, playlistLabel = 'Playlist') {
     const lines = setlist.songs.map((x, i) => {
         let line = `${i + 1}. ${x.title}`;
         if (x.artist) line += ` - ${x.artist}`;
@@ -61,6 +61,6 @@ export function setlistToText(setlist) {
         return line;
     });
     const header = setlist.name ? `${setlist.name}\n\n` : '';
-    const footer = setlist.playlistUrl ? `\n\nPlaylist: ${setlist.playlistUrl}` : '';
+    const footer = setlist.playlistUrl ? `\n\n${playlistLabel}: ${setlist.playlistUrl}` : '';
     return header + lines.join('\n') + footer;
 }

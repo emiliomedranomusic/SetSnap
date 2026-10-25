@@ -6,19 +6,19 @@
  * cualquier usuario salen de caché y no gastan cuota.
  */
 import { findVideos, watchUrls } from '../../lib/server/youtube.js';
-import { json, kvStore, clientIp, today, dailyLimits, intEnv } from '../../lib/server/common.js';
+import { json, kvStore, clientIp, today, dailyLimits, intEnv, tr } from '../../lib/server/common.js';
 
 const MAX_SONGS = 100;
 
 export async function onRequestPost({ request, env }) {
     if (!env.YOUTUBE_API_KEY && !env.ODESLI_API_KEY) {
-        return json(503, { success: false, message: 'YouTube no está configurado en este servidor.' });
+        return json(503, { success: false, message: tr(request, 'YouTube no está configurado en este servidor.', 'YouTube is not set up on this server.') });
     }
     let body;
     try {
         body = await request.json();
     } catch {
-        return json(400, { success: false, message: 'Petición inválida.' });
+        return json(400, { success: false, message: tr(request, 'Petición inválida.', 'Invalid request.') });
     }
     const songs = (Array.isArray(body?.songs) ? body.songs : [])
         .slice(0, MAX_SONGS)
@@ -28,13 +28,13 @@ export async function onRequestPost({ request, env }) {
             artist: String(s?.artist || '').slice(0, 200),
         }))
         .filter((s) => s.title);
-    if (!songs.length) return json(400, { success: false, message: 'No hay canciones.' });
+    if (!songs.length) return json(400, { success: false, message: tr(request, 'No hay canciones.', 'No songs.') });
 
     // Límite por IP para que una sola persona no se gaste la cuota del día.
     const limits = await dailyLimits(kvStore(env), [
         { name: 'ip', key: `yt:ip:${clientIp(request)}:${today()}`, max: intEnv(env.YOUTUBE_LISTS_PER_IP, 20) },
     ]);
-    if (limits.exceeded) return json(429, { success: false, message: 'Llegaste al límite de listas de YouTube por hoy.' });
+    if (limits.exceeded) return json(429, { success: false, message: tr(request, 'Llegaste al límite de listas de YouTube por hoy.', "You reached today's YouTube list limit.") });
 
     const { videos, limited } = await findVideos(env, songs);
     await limits.add(1);

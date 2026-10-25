@@ -20,7 +20,7 @@ const NOTE_CONTENT_RE = new RegExp(
     'i'
 );
 const TRAILING_NOTE_RE = new RegExp(
-    String.raw`\s+[-–—|/]?\s*((?:tono|tonalidad|key)\s*:?\s*${KEY_TOKEN}|en\s+${KEY_TOKEN}|capo\s*:?\s*\d+|\d{2,3}\s?bpm)\s*$`,
+    String.raw`\s+[-–—|/]?\s*((?:tono|tonalidad|key)\s*:?\s*${KEY_TOKEN}|(?:en|in)\s+${KEY_TOKEN}|capo\s*:?\s*\d+|\d{2,3}\s?bpm)\s*$`,
     'i'
 );
 // Paréntesis que describen una versión (se quedan en el título, no son artista).
@@ -103,6 +103,7 @@ function parseLine(rawLine) {
     let title = s;
     let artist = '';
     let ordered = false; // true si el formato fija la orientación (by/por)
+    let whole = ''; // con by/por, la línea completa también puede ser el título ("Stand by Me")
 
     const lower = s.toLowerCase();
     const directional = DIRECTIONAL_SEPARATORS.find((sep) => lower.includes(sep));
@@ -116,6 +117,7 @@ function parseLine(rawLine) {
         title = s.slice(0, idx);
         artist = s.slice(idx + directional.length);
         ordered = true;
+        whole = cleanToken(s);
     } else {
         // "Me voy (Julieta Venegas)": paréntesis final que no describe una versión.
         const m = s.match(/^(.+?)\s*\(([^()]{2,40})\)$/);
@@ -133,7 +135,9 @@ function parseLine(rawLine) {
     }
     if (!title) return null;
 
-    return { rawLine: raw, title, artist, note: notes.join(', '), ordered };
+    const item = { rawLine: raw, title, artist, note: notes.join(', '), ordered };
+    if (whole) item.whole = whole;
+    return item;
 }
 
 /**

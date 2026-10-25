@@ -68,6 +68,16 @@ Así cualquiera puede usar SetSnap sin registrarse: las playlists se crean en un
 
 La cuota gratis da ~100 búsquedas nuevas al día; cada canción se busca una sola vez y queda guardada para todos. Si consigues una llave de Odesli (song.link), ponla como `ODESLI_API_KEY` y ya no se gasta cuota de YouTube.
 
+**Precarga de éxitos (recomendado):** para que las ~600 canciones más tocadas ya estén listas desde el principio:
+
+1. En GitHub → tu repo → **Settings → Secrets and variables → Actions → New repository secret**, crea:
+   - `SETSNAP_URL` = `https://setsnap.pages.dev` (tu dominio, sin `/` final)
+   - `SETSNAP_ADMIN_KEY` = el mismo valor que `ADMIN_KEY`
+2. Listo: cada noche corre la tarea "Precargar caché de YouTube". Para correrla ya, entra a **Actions → Precargar caché de YouTube → Run workflow**.
+3. Para ver el avance: `curl -H "Authorization: Bearer TU_ADMIN_KEY" https://setsnap.pages.dev/api/admin/seed`
+
+La precarga necesita que la cuenta central esté conectada (Paso 5), porque primero ubica cada canción en Spotify.
+
 ## Paso 7: Instalar en el celular
 
 Abre la URL en el celular y usa **"Agregar a pantalla de inicio"** (en Android también aparece el botón "Instalar"). Una vez instalada en Android, SetSnap aparece en el menú **Compartir** de WhatsApp y la galería: compartes el mensaje o la foto del setlist y se carga sola.

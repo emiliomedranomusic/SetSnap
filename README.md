@@ -11,7 +11,9 @@ Convierte el setlist que te mandaron (texto de WhatsApp, lista impresa o foto es
 - **Revisar o crear directo.** En "Revisar antes" ves cada coincidencia, puedes elegir otra opción, editar la búsqueda u omitir la línea. En "Crear directo" se agregan las coincidencias seguras y las dudosas quedan abajo para resolverlas.
 - **Playlist nueva o existente**, sin repetir canciones que ya estén.
 - **Para la banda:** link para compartir el setlist (no necesitan cuenta, el setlist va dentro del link), copiar como texto e imprimir / guardar como PDF en letra grande con el tono de cada canción.
-- **Lista en YouTube sin login.** Arma una lista de YouTube con los videos del setlist (sin cuenta). Cada canción se busca una sola vez y queda en caché para todos.
+- **Lista en YouTube sin login.** Arma una lista de YouTube con los videos del setlist (sin cuenta). Cada canción se busca una sola vez y queda en caché para todos, para siempre; ~600 éxitos en inglés y español se precargan solos.
+- **Exportar CSV** para pasar el setlist a Deezer, Apple Music, Tidal, Amazon Music o YouTube Music con TuneMyMusic o Soundiiz.
+- **Español e inglés, modo claro/oscuro** (sigue al sistema o se elige a mano), instalable como app, aviso sin conexión, atajo Ctrl+Enter y accesible con teclado.
 
 ## Arquitectura
 
@@ -34,7 +36,10 @@ functions/              Cloudflare Pages Functions (lo único con servidor)
   api/youtube.js        Lista de YouTube sin login
   share-target.js       Respaldo de "Compartir" si el service worker no está activo
 lib/gemini.js           Llamada a Gemini (REST, sin SDK)
-lib/server/             Cuenta central, YouTube y utilidades (KV, límites)
+  api/admin/seed.js     Precarga de la caché de YouTube (administrador)
+lib/server/             Cuenta central, YouTube, precarga y utilidades (KV, límites)
+data/seed-songs.js      Canciones famosas que se precargan
+.github/workflows/      Tarea nocturna de precarga
 test/                   Tests (node --test)
 ```
 
@@ -75,6 +80,8 @@ Si cambias clases de Tailwind en el HTML o JS, `npm run dev` recompila el CSS al
 | `YOUTUBE_API_KEY` | No | Activa "Lista en YouTube". API key de Google Cloud con YouTube Data API v3 habilitada. |
 | `YOUTUBE_DAILY_SEARCHES` | No | Búsquedas nuevas de YouTube al día (por defecto 90; la cuota gratis da ~100). |
 | `YOUTUBE_LISTS_PER_IP` | No | Listas de YouTube al día por IP (por defecto 20). |
+| `YOUTUBE_SEED_RESERVE` | No | Búsquedas de YouTube que la precarga nocturna deja libres para los usuarios (por defecto 20). |
+| `SEED_MARKET` | No | País de Spotify para resolver la lista de precarga (por defecto `MX`). |
 | `ODESLI_API_KEY` | No | Llave de Odesli (song.link). Si está, se usa antes que la búsqueda de YouTube y no gasta cuota. |
 
 Binding de KV: `SETSNAP_KV` (límites, token de la cuenta central, caché de YouTube y del OCR). Sin él todo vive en memoria y se pierde: el modo sin cuenta no funcionará en producción.
@@ -106,7 +113,9 @@ Usa el link `youtube.com/watch_videos?video_ids=…`, que arma una lista sin cue
 Para encontrar el video de cada canción:
 - Si hay `ODESLI_API_KEY`, se convierte el track de Spotify a YouTube con Odesli (sin gastar cuota).
 - Si no, se busca con la API de YouTube: la cuota gratis da ~100 búsquedas al día.
-- **En ambos casos cada canción se busca una sola vez** y el resultado queda en KV 6 meses para todos. Como los músicos repiten mucho repertorio, con el tiempo la mayoría de las canciones salen de caché sin costo.
+- **En ambos casos cada canción se busca una sola vez** y el resultado queda en KV **para siempre**, para todos. Cada 6 meses se comprueba que el video siga existiendo (cuesta 1 unidad de cuota por cada 50 videos) y solo si lo borraron se vuelve a buscar.
+- **Precarga:** `data/seed-songs.js` trae ~600 canciones famosas en inglés y español (repertorio de eventos). Cada noche, `.github/workflows/seed-youtube.yml` llama a `/api/admin/seed`, que usa las búsquedas que sobraron del día (dejando una reserva para los usuarios). Con ~70 búsquedas libres al día, la lista completa queda en caché en unos 9 días. Puedes agregar canciones con `POST /api/admin/seed {"add": ["Canción - Artista", ...]}`.
+- La cuota de YouTube se reinicia a medianoche hora del Pacífico; el contador de SetSnap usa ese mismo día.
 
 ## Límites de Spotify (importante)
 

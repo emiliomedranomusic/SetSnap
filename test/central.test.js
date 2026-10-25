@@ -190,3 +190,8 @@ test('search: límite por IP en memoria', () => {
     assert.equal(overLimit('6.6.6.6', t0), false, 'otra IP no se afecta');
     assert.equal(overLimit('5.5.5.5', t0 + 11 * 60 * 1000), false, 'se reinicia tras la ventana');
 });
+
+test('mensajes en inglés si la app lo pide', async () => {
+    const res = await search({ request: req(`${BASE}/api/central/search?q=x`, { headers: { 'Accept-Language': 'en' } }), env });
+    assert.match((await res.json()).message, /not set up/);
+});

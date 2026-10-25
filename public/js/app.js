@@ -5,6 +5,7 @@ import * as spotify from './spotify.js';
 import * as guest from './guest.js';
 import { extractSetlistText } from './ocr.js';
 import { buildShareUrl, decodeSetlist, setlistToText } from './share.js';
+import { t, getLang, setLang, applyStatic } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -48,6 +49,15 @@ const els = {
     commitButton: $('commit-button'),
     commitLabel: $('commit-label'),
     printSheet: $('print-sheet'),
+    langButton: $('lang-button'),
+    themeButton: $('theme-button'),
+    themeIcon: $('theme-icon'),
+    installButton: $('install-button'),
+    offlineBanner: $('offline-banner'),
+    updateBanner: $('update-banner'),
+    updateButton: $('update-button'),
+    exampleButton: $('example-button'),
+    clearButton: $('clear-button'),
 };
 
 const state = {
@@ -57,6 +67,7 @@ const state = {
     created: null, // { id, url, name, added: Set<uri>, existing, alreadyThere }
     busy: false,
     playlists: null,
+    shared: null, // setlist abierto desde un link #s=
 };
 
 // ---------- utilidades ----------
@@ -134,7 +145,7 @@ function handleError(err) {
         state.me = null;
         renderAccount();
     }
-    setStatus(esc(err?.message || 'Algo salió mal.'), 'error');
+    setStatus(esc(err?.message || t('status.error')), 'error');
 }
 
 // ---------- cuenta ----------
@@ -174,7 +185,7 @@ function renderAccount() {
     // Agregar a una playlist existente requiere la cuenta de la persona.
     els.destinationExisting.disabled = !loggedIn;
     els.destinationExisting.closest('label').classList.toggle('opacity-40', !loggedIn);
-    els.destinationExisting.closest('label').title = loggedIn ? '' : 'Conecta tu Spotify para agregar a tus playlists';
+    els.destinationExisting.closest('label').title = loggedIn ? '' : t('dest.existingNeedsLogin');
     if (!loggedIn && els.destinationExisting.checked) {
         els.destinationNew.checked = true;
         updateDestination();
@@ -182,22 +193,22 @@ function renderAccount() {
 
     if (!loggedIn) {
         els.account.innerHTML = state.config.spotifyClientId && guestMode
-            ? '<button type="button" id="header-login" class="row-button">Usar mi Spotify</button>'
+            ? `<button type="button" id="header-login" class="row-button">${esc(t('header.useMySpotify'))}</button>`
             : '';
         $('header-login')?.addEventListener('click', login);
         return;
     }
     const name = state.me?.display_name || state.me?.id || 'Spotify';
     els.account.innerHTML = `
-        <span class="hidden sm:inline text-slate-500">Conectado como</span>
-        <span class="font-semibold text-slate-800 truncate max-w-[9rem]">${esc(name)}</span>
-        <button type="button" id="logout-button" class="row-button">Salir</button>`;
+        <span class="hidden sm:inline text-slate-500">${esc(t('header.connectedAs'))}</span>
+        <span class="font-semibold text-slate-800 truncate max-w-[7rem] sm:max-w-[9rem]">${esc(name)}</span>
+        <button type="button" id="logout-button" class="row-button">${esc(t('header.logout'))}</button>`;
     $('logout-button').addEventListener('click', () => {
         spotify.logout();
         state.me = null;
         state.playlists = null;
         renderAccount();
-        setStatus('Sesión de Spotify cerrada.');
+        setStatus(esc(t('status.loggedOut')));
     });
 }
 
@@ -225,7 +236,9 @@ async function login() {
 
 function updateLineCount() {
     const n = parseSetlist(els.textarea.value).length;
-    els.lineCount.textContent = n ? `${n} ${n === 1 ? 'canción detectada' : 'canciones detectadas'}` : '';
+    els.lineCount.textContent = n ? (n === 1 ? t('editor.line') : t('editor.lines', { n })) : '';
+    els.clearButton.classList.toggle('hidden', !els.textarea.value.trim());
+    els.exampleButton.classList.toggle('hidden', Boolean(els.textarea.value.trim()));
 }
 
 let draftTimer;
@@ -237,10 +250,8 @@ function saveDraft() {
 function updateMode() {
     const auto = radioValue('mode') === 'auto';
     const existing = radioValue('destination') === 'existing';
-    els.searchLabel.textContent = !auto ? 'Buscar canciones' : existing ? 'Buscar y agregar' : 'Buscar y crear playlist';
-    els.modeHelp.textContent = auto
-        ? 'Agrega de una vez las coincidencias seguras. Las dudosas quedan abajo para que las elijas.'
-        : 'Te muestra cada coincidencia para confirmarla antes de crear la playlist. El botón para crearla queda fijo abajo.';
+    els.searchLabel.textContent = !auto ? t('search.button') : existing ? t('search.buttonAutoExisting') : t('search.buttonAuto');
+    els.modeHelp.textContent = auto ? t('mode.autoHelp') : t('mode.reviewHelp');
     store.set('mode', radioValue('mode'));
 }
 
@@ -255,19 +266,19 @@ async function updateDestination() {
 
 async function loadPlaylists() {
     if (state.playlists || !spotify.isLoggedIn()) return;
-    els.existingSelect.innerHTML = '<option value="">Cargando tus playlists…</option>';
+    els.existingSelect.innerHTML = `<option value="">${esc(t('existing.loading'))}</option>`;
     try {
         const me = state.me || (await loadMe());
-        if (!me) throw Object.assign(new Error('Conecta tu cuenta de Spotify.'), { needsLogin: true });
+        if (!me) throw Object.assign(new Error(t('status.needLogin')), { needsLogin: true });
         state.playlists = await spotify.getEditablePlaylists(me.id);
         const last = store.get('lastPlaylist');
         els.existingSelect.innerHTML = state.playlists.length
-            ? '<option value="">Elige una playlist…</option>' + state.playlists
+            ? `<option value="">${esc(t('existing.choose'))}</option>` + state.playlists
                 .map((p) => `<option value="${esc(p.id)}"${p.id === last ? ' selected' : ''}>${esc(p.name)}</option>`)
                 .join('')
-            : '<option value="">No tienes playlists propias</option>';
+            : `<option value="">${esc(t('existing.none'))}</option>`;
     } catch (err) {
-        els.existingSelect.innerHTML = '<option value="">No se pudieron cargar</option>';
+        els.existingSelect.innerHTML = `<option value="">${esc(t('existing.failed'))}</option>`;
         handleError(err);
     }
 }
@@ -278,16 +289,16 @@ async function doSearch() {
     if (state.busy) return;
     const items = parseSetlist(els.textarea.value);
     if (!items.length) {
-        setStatus('Pega al menos una canción en el setlist.', 'error');
+        setStatus(esc(t('status.needText')), 'error');
         return;
     }
     if (!canSearch()) {
-        setStatus('Conecta tu cuenta de Spotify primero.', 'error');
+        setStatus(esc(t('status.needLogin')), 'error');
         return;
     }
     const auto = radioValue('mode') === 'auto';
     if (auto && radioValue('destination') === 'existing' && !els.existingSelect.value) {
-        setStatus('Elige la playlist a la que quieres agregar las canciones.', 'error');
+        setStatus(esc(t('status.choosePlaylist')), 'error');
         return;
     }
 
@@ -295,13 +306,13 @@ async function doSearch() {
     els.searchButton.disabled = true;
     state.created = null;
     els.donePanel.classList.add('hidden');
-    setStatus(`Buscando ${items.length} canciones en Spotify…`);
+    setStatus(esc(t('status.searchingN', { n: items.length })));
     setProgress(0, items.length);
 
     try {
         const results = await searchAll(items, searchFn(), (done, total) => {
             setProgress(done, total);
-            setStatus(`Buscando… ${done}/${total}`);
+            setStatus(esc(t('status.searchProgress', { done, total })));
         });
         state.results = results.map((r) => ({
             ...r,
@@ -319,9 +330,9 @@ async function doSearch() {
             if (s.pending) els.onlyPending.checked = true;
             renderResults();
         } else {
-            setStatus(s.pending
-                ? `${s.found} de ${s.total} encontradas con seguridad. Revisa ${s.pending} ${s.pending === 1 ? 'línea marcada' : 'líneas marcadas'} y crea la playlist.`
-                : `¡Las ${s.total} canciones encontradas! Revisa si quieres y crea la playlist.`, 'ok');
+            setStatus(esc(s.pending
+                ? t(s.pending === 1 ? 'status.foundSomeOne' : 'status.foundSome', { found: s.found, total: s.total, n: s.pending })
+                : t('status.foundAll', { total: s.total })), 'ok');
             els.resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     } catch (err) {
@@ -396,12 +407,12 @@ async function researchRow(idx, text) {
 
 function rowBadge(r) {
     const added = r.choice?.uri && state.created?.added.has(r.choice.uri);
-    if (r.choice?.skip) return ['Omitida', 'bg-slate-100 text-slate-500'];
-    if (r.duplicate) return ['Repetida', 'bg-slate-100 text-slate-500'];
-    if (added) return ['En la playlist', 'bg-green-100 text-green-800'];
-    if (r.status === 'found') return ['Encontrada', 'bg-green-100 text-green-800'];
-    if (r.status === 'manual') return ['Revisar', 'bg-amber-100 text-amber-800'];
-    return ['No encontrada', 'bg-red-100 text-red-700'];
+    if (r.choice?.skip) return [t('badge.skipped'), 'bg-slate-100 text-slate-500'];
+    if (r.duplicate) return [t('badge.duplicate'), 'bg-slate-100 text-slate-500'];
+    if (added) return [t('badge.added'), 'bg-green-100 text-green-800'];
+    if (r.status === 'found') return [t('badge.found'), 'bg-green-100 text-green-800'];
+    if (r.status === 'manual') return [t('badge.review'), 'bg-amber-100 text-amber-800'];
+    return [t('badge.notFound'), 'bg-red-100 text-red-700'];
 }
 
 function trackCard(track, score, { selected = false, idx = null } = {}) {
@@ -411,8 +422,8 @@ function trackCard(track, score, { selected = false, idx = null } = {}) {
     const dur = msToDuration(track.duration_ms);
     const button = idx == null ? '' : `
         <button type="button" data-action="choose" data-idx="${idx}" data-uri="${esc(track.uri)}"
-            class="${selected ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'} px-3 py-1.5 rounded-full text-xs font-semibold transition shrink-0">
-            ${selected ? 'Elegida' : 'Elegir'}
+            class="${selected ? 'bg-slate-900 text-surface' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'} px-3 py-1.5 rounded-full text-xs font-semibold transition shrink-0">
+            ${esc(selected ? t('row.chosen') : t('row.choose'))}
         </button>`;
     return `
         <div class="flex items-center gap-3 p-2.5 rounded-2xl border ${selected ? 'border-slate-800 bg-slate-50' : 'border-slate-100'}">
@@ -424,7 +435,7 @@ function trackCard(track, score, { selected = false, idx = null } = {}) {
                 <div class="text-xs text-slate-500 truncate">${esc(artistsOf(track))}${album ? ` · ${esc(album)}` : ''}${dur ? ` · ${dur}` : ''}</div>
             </div>
             <span class="text-xs font-medium text-slate-400 w-9 text-right shrink-0">${score}%</span>
-            ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="Abrir en Spotify" class="text-slate-400 hover:text-spotify-green shrink-0"><span class="material-symbols-outlined text-lg">open_in_new</span></a>` : ''}
+            ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(t('row.openSpotify'))}" aria-label="${esc(t('row.openSpotify'))}" class="text-slate-400 hover:text-spotify-green shrink-0"><span class="material-symbols-outlined text-lg" aria-hidden="true">open_in_new</span></a>` : ''}
             ${button}
         </div>`;
 }
@@ -437,9 +448,9 @@ function renderRow(r, idx) {
 
     let body = '';
     if (r.searching) {
-        body = '<p class="text-xs text-slate-500 mt-3">Buscando…</p>';
+        body = `<p class="text-xs text-slate-500 mt-3">${esc(t('row.searching'))}</p>`;
     } else if (r.choice?.skip) {
-        body = '<p class="text-xs text-slate-500 mt-3">No se agregará a la playlist.</p>';
+        body = `<p class="text-xs text-slate-500 mt-3">${esc(t('row.willSkip'))}</p>`;
     } else if (chosen && !r.expanded) {
         body = `<div class="mt-3">${trackCard(chosen.track, chosen.score)}</div>`;
     }
@@ -450,7 +461,7 @@ function renderRow(r, idx) {
                 .map((m) => trackCard(m.track, m.score, { selected: m.track.uri === r.choice?.uri, idx }))
                 .join('')}</div>`;
         } else {
-            body += '<p class="text-xs text-red-700 mt-3">Spotify no devolvió resultados. Prueba editando la búsqueda.</p>';
+            body += `<p class="text-xs text-red-700 mt-3">${esc(t('row.noResults'))}</p>`;
         }
     }
 
@@ -458,22 +469,22 @@ function renderRow(r, idx) {
         const value = r.artist ? `${r.title} - ${r.artist}` : r.title;
         body += `
             <form data-action="research" data-idx="${idx}" class="mt-3 flex gap-2">
-                <input name="q" value="${esc(value)}" class="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none" aria-label="Buscar otra vez">
-                <button class="row-button bg-slate-900 text-white hover:bg-slate-800">Buscar</button>
+                <input name="q" value="${esc(value)}" class="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none" aria-label="${esc(t('row.searchAgain'))}">
+                <button class="row-button bg-slate-900 text-surface hover:bg-slate-800">${esc(t('row.search'))}</button>
             </form>`;
     }
 
     const actions = [];
     if (!r.choice?.skip && r.matches.length > (r.expanded ? 0 : 1)) {
-        actions.push(`<button type="button" class="row-button" data-action="toggle" data-idx="${idx}">${r.expanded ? 'Ocultar opciones' : `Ver opciones (${r.matches.length})`}</button>`);
+        actions.push(`<button type="button" class="row-button" data-action="toggle" data-idx="${idx}">${esc(r.expanded ? t('row.hideOptions') : t('row.showOptions', { n: r.matches.length }))}</button>`);
     }
-    if (!r.choice?.skip) actions.push(`<button type="button" class="row-button" data-action="edit" data-idx="${idx}">${r.editing ? 'Cancelar' : 'Editar búsqueda'}</button>`);
+    if (!r.choice?.skip) actions.push(`<button type="button" class="row-button" data-action="edit" data-idx="${idx}">${esc(r.editing ? t('row.cancel') : t('row.edit'))}</button>`);
     actions.push(r.choice?.skip
-        ? `<button type="button" class="row-button" data-action="unskip" data-idx="${idx}">Incluir</button>`
-        : `<button type="button" class="row-button" data-action="skip" data-idx="${idx}">Omitir</button>`);
+        ? `<button type="button" class="row-button" data-action="unskip" data-idx="${idx}">${esc(t('row.include'))}</button>`
+        : `<button type="button" class="row-button" data-action="skip" data-idx="${idx}">${esc(t('row.skip'))}</button>`);
 
     return `
-        <li class="bg-white border border-slate-100 rounded-2xl p-4 shadow-[0_2px_8px_rgb(0,0,0,0.02)]">
+        <li class="bg-surface border border-slate-100 rounded-2xl p-4 shadow-[0_2px_8px_rgb(0,0,0,0.02)]">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                     <div class="flex items-baseline gap-2">
@@ -481,7 +492,7 @@ function renderRow(r, idx) {
                         <span class="text-sm font-medium text-slate-800 break-words">${esc(r.rawLine)}</span>
                     </div>
                     <div class="text-[11px] text-slate-400 ml-5 mt-0.5">
-                        Buscado como: ${esc(interpreted)}${r.note ? ` · <span class="font-semibold text-slate-600">${esc(r.note)}</span>` : ''}
+                        ${esc(t('row.searchedAs'))} ${esc(interpreted)}${r.note ? ` · <span class="font-semibold text-slate-600">${esc(r.note)}</span>` : ''}
                     </div>
                 </div>
                 <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${badgeClass}">${label}</span>
@@ -495,10 +506,10 @@ function renderResults() {
     chosenUris(); // actualiza r.duplicate
     const s = summary();
     els.resultsSummary.innerHTML = `
-        <span class="rounded-full px-2.5 py-1 bg-slate-100 text-slate-700">${s.total} líneas</span>
-        <span class="rounded-full px-2.5 py-1 bg-green-100 text-green-800">${s.found} encontradas</span>
-        ${s.manual ? `<span class="rounded-full px-2.5 py-1 bg-amber-100 text-amber-800">${s.manual} por revisar</span>` : ''}
-        ${s.notFound ? `<span class="rounded-full px-2.5 py-1 bg-red-100 text-red-700">${s.notFound} no encontradas</span>` : ''}`;
+        <span class="rounded-full px-2.5 py-1 bg-slate-100 text-slate-700">${esc(t('results.lines', { n: s.total }))}</span>
+        <span class="rounded-full px-2.5 py-1 bg-green-100 text-green-800">${esc(t('results.found', { n: s.found }))}</span>
+        ${s.manual ? `<span class="rounded-full px-2.5 py-1 bg-amber-100 text-amber-800">${esc(t('results.toReview', { n: s.manual }))}</span>` : ''}
+        ${s.notFound ? `<span class="rounded-full px-2.5 py-1 bg-red-100 text-red-700">${esc(t('results.notFound', { n: s.notFound }))}</span>` : ''}`;
 
     const onlyPending = els.onlyPending.checked;
     const html = state.results
@@ -508,7 +519,7 @@ function renderResults() {
             return renderRow(r, idx);
         })
         .join('');
-    els.resultsList.innerHTML = html || '<li class="text-sm text-slate-500 text-center py-6">No hay líneas pendientes por revisar. 🎉</li>';
+    els.resultsList.innerHTML = html || `<li class="text-sm text-slate-500 text-center py-6">${esc(t('results.nonePending'))}</li>`;
     renderCommitBar();
 }
 
@@ -521,15 +532,15 @@ function renderCommitBar() {
     const pending = pendingUris().length;
     const skipped = state.results.filter((r) => r.choice?.skip || !r.choice).length;
     if (state.created) {
-        els.commitLabel.textContent = pending ? `Agregar ${pending} más` : 'Todo agregado';
+        els.commitLabel.textContent = pending ? t('commit.addMore', { n: pending }) : t('commit.allAdded');
         els.commitButton.disabled = !pending || state.busy;
-        els.commitInfo.textContent = `Playlist: ${state.created.name}`;
+        els.commitInfo.textContent = t('commit.target', { name: state.created.name });
         return;
     }
     const existing = radioValue('destination') === 'existing';
-    els.commitLabel.textContent = `${existing ? 'Agregar a playlist' : 'Crear playlist'} (${pending})`;
+    els.commitLabel.textContent = t(existing ? 'commit.addTo' : 'commit.create', { n: pending });
     els.commitButton.disabled = !pending || state.busy;
-    els.commitInfo.textContent = skipped ? `${skipped} sin agregar (omitidas o sin coincidencia)` : 'Todas las canciones tienen coincidencia';
+    els.commitInfo.textContent = skipped ? t('commit.missing', { n: skipped }) : t('commit.allMatched');
 }
 
 // ---------- crear / agregar ----------
@@ -537,7 +548,7 @@ function renderCommitBar() {
 async function commit({ onlyFound = false } = {}) {
     const uris = chosenUris({ onlyFound });
     if (!uris.length && !state.created) {
-        setStatus('No hay canciones elegidas para agregar.', 'error');
+        setStatus(esc(t('status.nothingChosen')), 'error');
         renderResults();
         return;
     }
@@ -549,7 +560,7 @@ async function commit({ onlyFound = false } = {}) {
 
         if (!target && radioValue('destination') === 'existing') {
             const id = els.existingSelect.value;
-            if (!id) throw new Error('Elige la playlist a la que quieres agregar las canciones.');
+            if (!id) throw new Error(t('status.choosePlaylist'));
             const playlist = state.playlists?.find((p) => p.id === id);
             store.set('lastPlaylist', id);
             target = {
@@ -561,15 +572,15 @@ async function commit({ onlyFound = false } = {}) {
                 alreadyThere: 0,
             };
             if (els.skipExisting.checked) {
-                setStatus('Revisando qué canciones ya están en la playlist…');
+                setStatus(esc(t('status.checkingExisting')));
                 target.added = await spotify.getPlaylistUris(id);
                 const before = pending.length;
                 pending = pending.filter((u) => !target.added.has(u));
                 target.alreadyThere = before - pending.length;
             }
         } else if (!target && isGuest()) {
-            if (!pending.length) throw new Error('No hubo coincidencias seguras para crear la playlist. Elige las canciones abajo y pulsa Crear.');
-            setStatus('Creando la playlist…');
+            if (!pending.length) throw new Error(t('status.noSafeMatches'));
+            setStatus(esc(t('status.creating')));
             const playlist = await guest.createPlaylist({
                 name: els.name.value.trim() || defaultPlaylistName(),
                 description: els.description.value.trim(),
@@ -587,11 +598,11 @@ async function commit({ onlyFound = false } = {}) {
             };
             pending = [];
         } else if (!target) {
-            setStatus('Creando la playlist…');
+            setStatus(esc(t('status.creating')));
             const name = els.name.value.trim() || defaultPlaylistName();
             const playlist = await spotify.createPlaylist({
                 name,
-                description: els.description.value.trim() || 'Creada con SetSnap',
+                description: els.description.value.trim() || t('done.description'),
                 isPublic: els.isPublic.checked,
             });
             target = { id: playlist.id, name: playlist.name || name, url: playlist.external_urls?.spotify, added: new Set(), existing: false, alreadyThere: 0 };
@@ -599,7 +610,7 @@ async function commit({ onlyFound = false } = {}) {
 
         state.created = target;
         if (pending.length) {
-            setStatus(`Agregando ${pending.length} canciones…`);
+            setStatus(esc(t('status.adding', { n: pending.length })));
             if (target.guest) await guest.addItems(target.id, target.editToken, pending);
             else await spotify.addItems(target.id, pending);
             pending.forEach((u) => target.added.add(u));
@@ -616,33 +627,38 @@ async function commit({ onlyFound = false } = {}) {
     }
 }
 
-function renderDone() {
-    const t = state.created;
-    if (!t) return;
+function renderDone({ scroll = true } = {}) {
+    const target = state.created;
+    if (!target) return;
     const s = summary();
-    const leftover = state.results.filter((r) => !r.choice?.skip && !(r.choice?.uri && t.added.has(r.choice.uri))).length;
-    const verb = t.existing ? 'Se agregaron' : 'Playlist creada:';
+    const leftover = state.results.filter((r) => !r.choice?.skip && !(r.choice?.uri && target.added.has(r.choice.uri))).length;
+    const title = target.existing
+        ? t('done.addedTo', { n: target.lastAdded, name: target.name })
+        : t('done.created', { name: target.name });
+    const details = [
+        target.added.size && !target.existing ? t('done.inPlaylist', { n: target.added.size }) : '',
+        target.alreadyThere ? t('done.alreadyThere', { n: target.alreadyThere }) : '',
+        leftover ? t('done.pending', { n: leftover, total: s.total }) : '',
+    ].filter(Boolean).join(' ');
     els.donePanel.innerHTML = `
         <div class="flex flex-col sm:flex-row sm:items-center gap-3">
             <div class="flex-1">
-                <p class="font-semibold text-green-800">${verb} ${t.existing ? `${t.lastAdded} canciones a ` : ''}“${esc(t.name)}”</p>
-                <p class="text-xs text-green-700 mt-1">
-                    ${t.added.size && !t.existing ? `${t.added.size} canciones en la playlist.` : ''}
-                    ${t.alreadyThere ? `${t.alreadyThere} ya estaban y no se repitieron.` : ''}
-                    ${leftover ? `${leftover} de ${s.total} quedan pendientes abajo.` : ''}
-                </p>
+                <p class="font-semibold text-green-800">${esc(title)}</p>
+                <p class="text-xs text-green-700 mt-1">${esc(details)}</p>
             </div>
-            ${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-spotify-green text-white text-sm font-semibold no-underline hover:opacity-90">
-                <span class="material-symbols-outlined text-lg">open_in_new</span>Abrir en Spotify</a>` : ''}
+            ${target.url ? `<a href="${esc(target.url)}" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-spotify-green text-white text-sm font-semibold no-underline hover:opacity-90">
+                <span class="material-symbols-outlined text-lg" aria-hidden="true">open_in_new</span>${esc(t('done.open'))}</a>` : ''}
         </div>
-        ${t.guest ? `
+        ${target.guest ? `
         <div class="mt-4 pt-4 border-t border-green-200 text-xs text-green-900 leading-relaxed">
-            <p class="font-semibold mb-1">¿La quieres en tu cuenta para editarla?</p>
-            <p>La playlist está en el perfil de SetSnap. Ábrela en Spotify, toca <b>⋯</b> → <b>Agregar a otra playlist</b> → <b>Nueva playlist</b> y tendrás tu propia copia. También puedes darle a <b>Guardar</b> (+) para tenerla en tu biblioteca tal cual.</p>
+            <p class="font-semibold mb-1">${esc(t('done.copyTitle'))}</p>
+            <p>${t('done.copyHelp')}</p>
         </div>` : ''}`;
     els.donePanel.classList.remove('hidden');
-    setStatus('');
-    els.donePanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (scroll) {
+        setStatus('');
+        els.donePanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 // ---------- compartir / exportar ----------
@@ -665,26 +681,24 @@ function currentSetlist() {
 
 async function openYouTube(setlist) {
     if (!setlist.songs.length) {
-        setStatus('No hay canciones para armar la lista.', 'error');
+        setStatus(esc(t('yt.none')), 'error');
         return;
     }
-    setStatus('<span class="animate-pulse">Buscando los videos en YouTube…</span>');
+    setStatus(`<span class="animate-pulse">${esc(t('yt.searching'))}</span>`);
     try {
         const { urls, found, total, limited } = await guest.youtubeLists(setlist.songs);
         if (!urls.length) {
-            setStatus(limited
-                ? 'Se acabaron las búsquedas de YouTube de hoy. Las canciones que ya alguien buscó salen al instante; intenta mañana con las demás.'
-                : 'No encontré videos para estas canciones.', 'error');
+            setStatus(esc(limited ? t('yt.outOfQuota') : t('yt.noVideos')), 'error');
             return;
         }
         const links = urls
-            .map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-red-600 text-white text-sm font-semibold no-underline hover:opacity-90"><span class="material-symbols-outlined text-lg">smart_display</span>Abrir en YouTube${urls.length > 1 ? ` (parte ${i + 1})` : ''}</a>`)
+            .map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-youtube text-white text-sm font-semibold no-underline hover:opacity-90"><span class="material-symbols-outlined text-lg" aria-hidden="true">smart_display</span>${esc(t('yt.open'))}${urls.length > 1 ? esc(t('yt.part', { n: i + 1 })) : ''}</a>`)
             .join(' ');
         const missing = total - found;
         const note = missing
-            ? `<p class="text-xs text-slate-500 mt-2">${missing} de ${total} sin video${limited ? ' (se acabaron las búsquedas de hoy)' : ''}.</p>`
+            ? `<p class="text-xs text-slate-500 mt-2">${esc(t('yt.missing', { n: missing, total }))}${limited ? esc(t('yt.missingQuota')) : ''}.</p>`
             : '';
-        setStatus(`<div class="flex flex-wrap justify-center gap-2">${links}</div>${note}<p class="text-xs text-slate-500 mt-2">YouTube la abre como lista sin nombre. Para conservarla, guárdala desde YouTube.</p>`, 'info');
+        setStatus(`<div class="flex flex-wrap justify-center gap-2">${links}</div>${note}<p class="text-xs text-slate-500 mt-2">${esc(t('yt.saveHint'))}</p>`, 'info');
         els.status.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (err) {
         handleError(err);
@@ -694,9 +708,9 @@ async function openYouTube(setlist) {
 async function copyText(text, okMessage) {
     try {
         await navigator.clipboard.writeText(text);
-        setStatus(okMessage, 'ok');
+        setStatus(esc(okMessage), 'ok');
     } catch {
-        window.prompt('Copia el texto:', text);
+        window.prompt(t('status.copyPrompt'), text);
     }
 }
 
@@ -704,13 +718,40 @@ async function shareSetlist(setlist) {
     const url = await buildShareUrl(setlist);
     if (navigator.share) {
         try {
-            await navigator.share({ title: setlist.name, text: `Setlist: ${setlist.name}`, url });
+            await navigator.share({ title: setlist.name, text: t('share.title', { name: setlist.name }), url });
             return;
         } catch (err) {
             if (err?.name === 'AbortError') return;
         }
     }
-    await copyText(url, 'Link copiado. Pégalo en el grupo de la banda: no necesitan cuenta para verlo.');
+    await copyText(url, t('status.linkCopied'));
+}
+
+function csvCell(value) {
+    const s = String(value ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** CSV para importar en TuneMyMusic/Soundiiz (encabezados en inglés, que es lo que reconocen). */
+function exportCsv() {
+    const rows = [['Track name', 'Artist name', 'Album', 'Note', 'Spotify URL']];
+    for (const r of state.results) {
+        if (r.choice?.skip) continue;
+        const m = r.choice?.uri ? r.matches.find((x) => x.track.uri === r.choice.uri) : null;
+        rows.push(m
+            ? [cleanTrackName(m.track.name), artistsOf(m.track), m.track.album?.name || '', r.note, trackUrl(m.track)]
+            : [r.title, r.artist, '', r.note, '']);
+    }
+    const csv = '\ufeff' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n');
+    const name = (state.created?.name || els.name.value.trim() || defaultPlaylistName()).replace(/[\\/:*?"<>|]+/g, '-');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `${name}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setStatus(esc(t('status.csvReady')), 'ok');
 }
 
 function printSetlist(setlist) {
@@ -735,26 +776,50 @@ function reset() {
 // ---------- vista compartida (#s=...) ----------
 
 async function showShareView(code) {
-    let setlist;
     try {
-        setlist = await decodeSetlist(code);
+        state.shared = await decodeSetlist(code);
     } catch {
-        setStatus('El link del setlist está incompleto o dañado.', 'error');
+        setStatus(esc(t('status.badShareLink')), 'error');
         return;
     }
     els.editor.classList.add('hidden');
     els.shareView.classList.remove('hidden');
+    renderShareView();
+    els.shareView.addEventListener('click', (e) => {
+        const setlist = state.shared;
+        const action = e.target.closest('[data-share]')?.dataset.share;
+        if (action === 'print') printSetlist(setlist);
+        if (action === 'copy') copyText(setlistToText(setlist, t('share.playlistLine')), t('share.copied'));
+        if (action === 'youtube') openYouTube(setlist);
+        if (action === 'use') {
+            els.textarea.value = setlist.songs
+                .map((x) => `${x.title}${x.artist ? ` - ${x.artist}` : ''}${x.note ? ` (${x.note})` : ''}`)
+                .join('\n');
+            els.name.value = setlist.name;
+            saveDraft();
+            updateLineCount();
+            state.shared = null;
+            window.history.replaceState({}, '', '/');
+            els.shareView.classList.add('hidden');
+            els.editor.classList.remove('hidden');
+        }
+    });
+}
+
+function renderShareView() {
+    const setlist = state.shared;
+    if (!setlist) return;
     els.shareView.innerHTML = `
-        <div class="bg-white rounded-xl custom-shadow border border-slate-200 p-5 sm:p-8">
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Setlist compartido</p>
+        <div class="bg-surface rounded-xl custom-shadow border border-slate-200 p-5 sm:p-8">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">${esc(t('share.label'))}</p>
             <h1 class="text-2xl font-bold mt-1">${esc(setlist.name || 'Setlist')}</h1>
-            <p class="text-sm text-slate-500 mt-1">${setlist.songs.length} canciones</p>
+            <p class="text-sm text-slate-500 mt-1">${esc(t('share.count', { n: setlist.songs.length }))}</p>
             <div class="flex flex-wrap gap-2 mt-4">
-                ${setlist.playlistUrl ? `<a href="${esc(setlist.playlistUrl)}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-spotify-green text-white text-sm font-semibold no-underline hover:opacity-90"><span class="material-symbols-outlined text-lg">play_circle</span>Abrir playlist</a>` : ''}
-                <button type="button" data-share="print" class="chip-button"><span class="material-symbols-outlined text-base">print</span>Imprimir / PDF</button>
-                <button type="button" data-share="copy" class="chip-button"><span class="material-symbols-outlined text-base">content_copy</span>Copiar texto</button>
-                ${state.config.youtubeEnabled ? '<button type="button" data-share="youtube" class="chip-button"><span class="material-symbols-outlined text-base">smart_display</span>Escuchar en YouTube</button>' : ''}
-                <button type="button" data-share="use" class="chip-button"><span class="material-symbols-outlined text-base">edit</span>Usar en SetSnap</button>
+                ${setlist.playlistUrl ? `<a href="${esc(setlist.playlistUrl)}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-spotify-green text-white text-sm font-semibold no-underline hover:opacity-90"><span class="material-symbols-outlined text-lg" aria-hidden="true">play_circle</span>${esc(t('share.openPlaylist'))}</a>` : ''}
+                <button type="button" data-share="print" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">print</span>${esc(t('results.print'))}</button>
+                <button type="button" data-share="copy" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">content_copy</span>${esc(t('share.copy'))}</button>
+                ${state.config.youtubeEnabled ? `<button type="button" data-share="youtube" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">smart_display</span>${esc(t('share.youtube'))}</button>` : ''}
+                <button type="button" data-share="use" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">edit</span>${esc(t('share.use'))}</button>
             </div>
             <ol class="mt-6 divide-y divide-slate-100">
                 ${setlist.songs.map((x, i) => `
@@ -765,27 +830,10 @@ async function showShareView(code) {
                             ${x.artist ? `<div class="text-xs text-slate-500 truncate">${esc(x.artist)}</div>` : ''}
                         </div>
                         ${x.note ? `<span class="text-xs font-bold border border-slate-300 rounded-md px-2 py-0.5">${esc(x.note)}</span>` : ''}
-                        ${x.id ? `<a href="https://open.spotify.com/track/${esc(x.id)}" target="_blank" rel="noopener" title="Escuchar en Spotify" class="text-slate-400 hover:text-spotify-green"><span class="material-symbols-outlined text-xl">play_arrow</span></a>` : ''}
+                        ${x.id ? `<a href="https://open.spotify.com/track/${esc(x.id)}" target="_blank" rel="noopener" title="${esc(t('share.listen'))}" aria-label="${esc(t('share.listen'))}" class="text-slate-400 hover:text-spotify-green"><span class="material-symbols-outlined text-xl" aria-hidden="true">play_arrow</span></a>` : ''}
                     </li>`).join('')}
             </ol>
         </div>`;
-    els.shareView.addEventListener('click', (e) => {
-        const action = e.target.closest('[data-share]')?.dataset.share;
-        if (action === 'print') printSetlist(setlist);
-        if (action === 'copy') copyText(setlistToText(setlist), 'Setlist copiado.');
-        if (action === 'youtube') openYouTube(setlist);
-        if (action === 'use') {
-            els.textarea.value = setlist.songs
-                .map((x) => `${x.title}${x.artist ? ` - ${x.artist}` : ''}${x.note ? ` (${x.note})` : ''}`)
-                .join('\n');
-            els.name.value = setlist.name;
-            saveDraft();
-            updateLineCount();
-            window.history.replaceState({}, '', '/');
-            els.shareView.classList.add('hidden');
-            els.editor.classList.remove('hidden');
-        }
-    });
 }
 
 // ---------- OCR ----------
@@ -793,28 +841,28 @@ async function showShareView(code) {
 async function runOcr(file) {
     if (!file || !file.type?.startsWith('image/')) return;
     if (!state.config.ocrEnabled) {
-        setStatus('La lectura de fotos no está activada en este servidor.', 'error');
+        setStatus(esc(t('ocr.disabled')), 'error');
         return;
     }
     if (!canOcr()) {
-        setStatus('Conecta tu cuenta de Spotify para leer fotos de setlists.', 'error');
+        setStatus(esc(t('ocr.needLogin')), 'error');
         return;
     }
     els.photoButton.disabled = true;
-    setStatus('<span class="animate-pulse">✨ Leyendo la imagen…</span>');
+    setStatus(`<span class="animate-pulse">${esc(t('ocr.reading'))}</span>`);
     try {
         const { lines, remaining } = await extractSetlistText(file);
-        if (!lines.length) throw new Error('No encontré canciones en la imagen. Prueba con una foto más nítida.');
+        if (!lines.length) throw new Error(t('ocr.noSongs'));
         const current = els.textarea.value.trim();
-        if (current && window.confirm('¿Agregar estas canciones al final del texto actual?\n\nAceptar = agregar · Cancelar = reemplazar')) {
+        if (current && window.confirm(t('ocr.appendConfirm'))) {
             els.textarea.value = `${current}\n${lines.join('\n')}`;
         } else {
             els.textarea.value = lines.join('\n');
         }
         saveDraft();
         updateLineCount();
-        const left = typeof remaining === 'number' ? ` Te quedan ${remaining} lecturas hoy.` : '';
-        setStatus(`Se leyeron ${lines.length} canciones. Revisa el texto y pulsa Buscar.${left}`, 'ok');
+        const left = typeof remaining === 'number' ? t('ocr.remaining', { n: remaining }) : '';
+        setStatus(esc(t('ocr.done', { n: lines.length }) + left), 'ok');
         els.textarea.focus();
     } catch (err) {
         handleError(err);
@@ -837,13 +885,13 @@ async function consumeSharedContent() {
                 els.textarea.value = text;
                 saveDraft();
                 updateLineCount();
-                setStatus('Texto recibido. Revisa y pulsa Buscar.', 'ok');
+                setStatus(esc(t('status.textReceived')), 'ok');
             }
         }
         const imageRes = await cache.match('/shared-image');
         if (imageRes) {
             if (!canOcr()) {
-                setStatus('Recibí una imagen. Conecta Spotify para leerla.', 'info');
+                setStatus(esc(t('status.imageReceivedLogin')), 'info');
                 return;
             }
             const blob = await imageRes.blob();
@@ -855,12 +903,126 @@ async function consumeSharedContent() {
     }
 }
 
+// ---------- tema, idioma y app instalable ----------
+
+const THEMES = ['system', 'light', 'dark'];
+const THEME_ICONS = { system: 'contrast', light: 'light_mode', dark: 'dark_mode' };
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+function currentTheme() {
+    const saved = store.get('theme');
+    return THEMES.includes(saved) ? saved : 'system';
+}
+
+function applyTheme() {
+    const pref = currentTheme();
+    const dark = pref === 'dark' || (pref === 'system' && darkQuery.matches);
+    document.documentElement.classList.toggle('dark', dark);
+    els.themeIcon.textContent = THEME_ICONS[pref];
+    els.themeButton.title = t(`theme.${pref}`);
+}
+
+function cycleTheme() {
+    const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+    store.set('theme', next);
+    // Sin transiciones durante el cambio, para que no se vea a medias.
+    document.documentElement.classList.add('theme-switching');
+    applyTheme();
+    requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove('theme-switching')));
+}
+
+/** Re-pinta todo lo que tiene texto al cambiar de idioma. */
+function renderLanguage() {
+    applyStatic();
+    els.langButton.textContent = getLang() === 'es' ? 'EN' : 'ES';
+    applyTheme();
+    renderAccount();
+    updateMode();
+    updateLineCount();
+    if (state.results.length) renderResults();
+    if (state.created) renderDone({ scroll: false });
+    renderShareView();
+}
+
+function toggleLanguage() {
+    setLang(getLang() === 'es' ? 'en' : 'es');
+    renderLanguage();
+}
+
+let installPrompt = null;
+
+function bindAppEvents() {
+    els.langButton.addEventListener('click', toggleLanguage);
+    els.themeButton.addEventListener('click', cycleTheme);
+    darkQuery.addEventListener?.('change', applyTheme);
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        installPrompt = e;
+        els.installButton.classList.remove('hidden');
+    });
+    els.installButton.addEventListener('click', async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        await installPrompt.userChoice.catch(() => null);
+        installPrompt = null;
+        els.installButton.classList.add('hidden');
+    });
+    window.addEventListener('appinstalled', () => els.installButton.classList.add('hidden'));
+
+    const updateOnline = () => els.offlineBanner.classList.toggle('hidden', navigator.onLine !== false);
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    updateOnline();
+}
+
+/** Avisa cuando hay una versión nueva del service worker esperando. */
+function watchForUpdates(registration) {
+    const show = (worker) => {
+        els.updateBanner.classList.remove('hidden');
+        els.updateBanner.classList.add('flex');
+        els.updateButton.onclick = () => worker.postMessage({ type: 'SKIP_WAITING' });
+    };
+    if (registration.waiting && navigator.serviceWorker.controller) show(registration.waiting);
+    registration.addEventListener('updatefound', () => {
+        const worker = registration.installing;
+        worker?.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) show(worker);
+        });
+    });
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading || !els.updateBanner.classList.contains('flex')) return;
+        reloading = true;
+        window.location.reload();
+    });
+}
+
 // ---------- eventos ----------
 
 function bindEvents() {
+    bindAppEvents();
     els.textarea.addEventListener('input', () => {
         updateLineCount();
         saveDraft();
+    });
+    els.textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            if (!els.searchButton.classList.contains('hidden')) doSearch();
+        }
+    });
+    els.exampleButton.addEventListener('click', () => {
+        els.textarea.value = t('editor.exampleText');
+        saveDraft();
+        updateLineCount();
+        els.textarea.focus();
+    });
+    els.clearButton.addEventListener('click', () => {
+        els.textarea.value = '';
+        saveDraft();
+        updateLineCount();
+        els.textarea.focus();
     });
     els.searchButton.addEventListener('click', doSearch);
     els.loginButton.addEventListener('click', login);
@@ -938,7 +1100,8 @@ function bindEvents() {
         const action = e.target.closest('.chip-button[data-action]')?.dataset.action;
         if (!action) return;
         if (action === 'share') shareSetlist(currentSetlist()).catch(handleError);
-        if (action === 'copy-text') copyText(setlistToText(currentSetlist()), 'Setlist copiado como texto.');
+        if (action === 'copy-text') copyText(setlistToText(currentSetlist(), t('share.playlistLine')), t('status.setlistCopied'));
+        if (action === 'csv') exportCsv();
         if (action === 'print') printSetlist(currentSetlist());
         if (action === 'youtube') openYouTube(currentSetlist());
         if (action === 'reset') reset();
@@ -964,10 +1127,10 @@ function applyUrlParams() {
     if (text) {
         els.textarea.value = text;
         saveDraft();
-        setStatus('Texto recibido. Revisa y pulsa Buscar.', 'ok');
+        setStatus(esc(t('status.textReceived')), 'ok');
     }
     if (shared === 'nosw') {
-        setStatus('Para compartir fotos a SetSnap, abre la app una vez y vuelve a intentarlo.', 'info');
+        setStatus(esc(t('status.shareNeedsSw')), 'info');
     }
     window.history.replaceState({}, '', '/');
 }
@@ -983,6 +1146,9 @@ async function loadConfig() {
 }
 
 async function init() {
+    applyStatic();
+    els.langButton.textContent = getLang() === 'es' ? 'EN' : 'ES';
+    applyTheme();
     bindEvents();
     restoreForm();
     updateMode();
@@ -995,13 +1161,13 @@ async function init() {
     }
 
     try {
-        if (await spotify.handleRedirect()) setStatus('¡Conectado a Spotify! Pega tu setlist y pulsa Buscar.', 'ok');
+        if (await spotify.handleRedirect()) setStatus(esc(t('status.connected')), 'ok');
     } catch (err) {
         handleError(err);
     }
 
     if (!state.config.spotifyClientId) {
-        setStatus('Falta configurar SPOTIFY_CLIENT_ID en el servidor (ver README).', 'error');
+        setStatus(esc(t('status.missingClientId')), 'error');
     }
 
     renderAccount();
@@ -1011,7 +1177,9 @@ async function init() {
     await consumeSharedContent();
 
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('Service worker no registrado', err));
+        navigator.serviceWorker.register('/sw.js')
+            .then(watchForUpdates)
+            .catch((err) => console.warn('Service worker no registrado', err));
     }
 }
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { memoryKV, mockFetch, req } from './helpers.js';
-import { findVideos, watchUrls, videoIdFromUrl, cacheKey } from '../lib/server/youtube.js';
+import { findVideos, watchUrls, videoIdFromUrl, cacheKey, quotaDay, parseEntry } from '../lib/server/youtube.js';
 import { onRequestPost as youtube } from '../functions/api/youtube.js';
 
 const SP = (n) => String(n).padStart(22, 'b');
@@ -33,8 +33,8 @@ test('cada canción se busca una vez: la segunda vez sale de caché', async () =
         const again = await findVideos(env, songs);
         assert.deepEqual(again.videos, [VID(1), VID(2)]);
         assert.equal(m.calls.length, 2, 'no volvió a gastar búsquedas');
-        assert.equal(env.SETSNAP_KV.map.get(`yt:searches:${new Date().toISOString().slice(0, 10)}`), '2');
-        assert.ok(env.SETSNAP_KV.map.has(cacheKey(songs[0])));
+        assert.equal(env.SETSNAP_KV.map.get(`yt:searches:${quotaDay()}`), '2');
+        assert.equal(parseEntry(env.SETSNAP_KV.map.get(cacheKey(songs[0]))).v, VID(1));
     } finally {
         m.restore();
     }
@@ -93,6 +93,70 @@ test('endpoint /api/youtube', async () => {
         assert.deepEqual(data.urls, [`https://www.youtube.com/watch_videos?video_ids=${VID(3)}`]);
         const off = await youtube({ request: req('https://x/api/youtube', { method: 'POST', body: { songs: [] } }), env: { SETSNAP_KV: memoryKV() } });
         assert.equal(off.status, 503);
+    } finally {
+        m.restore();
+    }
+});
+
+test('quotaDay usa la hora del Pacífico', () => {
+    // 2026-10-25 05:00 UTC = 2026-10-24 22:00 en Los Ángeles
+    assert.equal(quotaDay(new Date('2026-10-25T05:00:00Z')), '2026-10-24');
+    assert.equal(quotaDay(new Date('2026-10-25T09:00:00Z')), '2026-10-25');
+});
+
+test('parseEntry acepta el formato viejo y el nuevo', () => {
+    assert.deepEqual(parseEntry(VID(1)), { v: VID(1), t: 0 });
+    assert.deepEqual(parseEntry('-'), { v: null, t: 0 });
+    assert.deepEqual(parseEntry(JSON.stringify({ v: VID(2), t: 5 })), { v: VID(2), t: 5 });
+    assert.equal(parseEntry(null), null);
+});
+
+test('la caché no vence: tras 6 meses solo se comprueba que el video siga (1 llamada barata)', async () => {
+    const env = { YOUTUBE_API_KEY: 'k', SETSNAP_KV: memoryKV() };
+    const old = Date.now() - 200 * 24 * 60 * 60 * 1000;
+    env.SETSNAP_KV.map.set(cacheKey({ id: SP(1) }), JSON.stringify({ v: VID(1), t: old }));
+    env.SETSNAP_KV.map.set(cacheKey({ id: SP(2) }), JSON.stringify({ v: VID(2), t: old }));
+    const m = mockFetch([
+        ['https://www.googleapis.com/youtube/v3/videos', (url) => {
+            assert.equal(new URL(url).searchParams.get('id'), `${VID(1)},${VID(2)}`);
+            return Response.json({ items: [{ id: VID(1) }] }); // el 2 ya no existe
+        }],
+        ['https://www.googleapis.com/youtube/v3/search', () => Response.json({ items: [{ id: { videoId: VID(9) } }] })],
+    ]);
+    try {
+        const res = await findVideos(env, [{ id: SP(1), title: 'A' }, { id: SP(2), title: 'B' }]);
+        assert.deepEqual(res.videos, [VID(1), VID(9)], 'el que desapareció se vuelve a buscar');
+        assert.equal(m.calls.filter((c) => c.url.includes('/videos')).length, 1);
+        assert.equal(m.calls.filter((c) => c.url.includes('/search')).length, 1);
+        assert.ok(parseEntry(env.SETSNAP_KV.map.get(cacheKey({ id: SP(1) }))).t > old, 'se renovó la fecha');
+    } finally {
+        m.restore();
+    }
+});
+
+test('los encontrados recientes no gastan nada', async () => {
+    const env = { YOUTUBE_API_KEY: 'k', SETSNAP_KV: memoryKV() };
+    env.SETSNAP_KV.map.set(cacheKey({ id: SP(1) }), JSON.stringify({ v: VID(1), t: Date.now() }));
+    const m = mockFetch([]);
+    try {
+        const res = await findVideos(env, [{ id: SP(1), title: 'A' }]);
+        assert.deepEqual(res.videos, [VID(1)]);
+        assert.equal(m.calls.length, 0);
+    } finally {
+        m.restore();
+    }
+});
+
+test('no pasa del límite de peticiones por llamada', async () => {
+    const env = { YOUTUBE_API_KEY: 'k', YOUTUBE_DAILY_SEARCHES: '500', SETSNAP_KV: memoryKV() };
+    let n = 0;
+    const m = mockFetch([['https://www.googleapis.com/youtube/v3/search', () => Response.json({ items: [{ id: { videoId: VID(++n) } }] })]]);
+    try {
+        const songs = Array.from({ length: 60 }, (_, i) => ({ id: SP(i + 1), title: `T${i}` }));
+        const res = await findVideos(env, songs);
+        assert.equal(m.calls.length, 40);
+        assert.equal(res.limited, true);
+        assert.equal(res.videos.filter(Boolean).length, 40);
     } finally {
         m.restore();
     }
