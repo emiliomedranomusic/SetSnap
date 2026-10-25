@@ -1,3 +1,234 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --c-slate-50: 248 250 252;
+    --c-slate-100: 241 245 249;
+    --c-slate-200: 226 232 240;
+    --c-slate-300: 203 213 225;
+    --c-slate-400: 148 163 184;
+    --c-slate-500: 100 116 139;
+    --c-slate-600: 71 85 105;
+    --c-slate-700: 51 65 85;
+    --c-slate-800: 30 41 59;
+    --c-slate-900: 15 23 42;
+    --c-slate-950: 2 6 23;
+    --c-green-50: 240 253 244;
+    --c-green-100: 220 252 231;
+    --c-green-200: 187 247 208;
+    --c-green-300: 134 239 172;
+    --c-green-400: 74 222 128;
+    --c-green-500: 34 197 94;
+    --c-green-600: 22 163 74;
+    --c-green-700: 21 128 61;
+    --c-green-800: 22 101 52;
+    --c-green-900: 20 83 45;
+    --c-green-950: 5 46 22;
+    --c-amber-50: 255 251 235;
+    --c-amber-100: 254 243 199;
+    --c-amber-200: 253 230 138;
+    --c-amber-300: 252 211 77;
+    --c-amber-400: 251 191 36;
+    --c-amber-500: 245 158 11;
+    --c-amber-600: 217 119 6;
+    --c-amber-700: 180 83 9;
+    --c-amber-800: 146 64 14;
+    --c-amber-900: 120 53 15;
+    --c-amber-950: 69 26 3;
+    --c-red-50: 254 242 242;
+    --c-red-100: 254 226 226;
+    --c-red-200: 254 202 202;
+    --c-red-300: 252 165 165;
+    --c-red-400: 248 113 113;
+    --c-red-500: 239 68 68;
+    --c-red-600: 220 38 38;
+    --c-red-700: 185 28 28;
+    --c-red-800: 153 27 27;
+    --c-red-900: 127 29 29;
+    --c-red-950: 69 10 10;
+    --c-surface: 255 255 255;
+    --c-background: 246 247 248;
+  }
+
+  .dark {
+    --c-slate-50: 11 19 36;
+    --c-slate-100: 30 41 59;
+    --c-slate-200: 51 65 85;
+    --c-slate-300: 71 85 105;
+    --c-slate-400: 131 145 167;
+    --c-slate-500: 154 168 189;
+    --c-slate-600: 203 213 225;
+    --c-slate-700: 217 225 236;
+    --c-slate-800: 226 232 240;
+    --c-slate-900: 241 245 249;
+    --c-slate-950: 248 250 252;
+    --c-green-50: 11 42 23;
+    --c-green-100: 20 83 45;
+    --c-green-200: 22 101 52;
+    --c-green-300: 21 128 61;
+    --c-green-400: 22 163 74;
+    --c-green-500: 34 197 94;
+    --c-green-600: 74 222 128;
+    --c-green-700: 134 239 172;
+    --c-green-800: 187 247 208;
+    --c-green-900: 220 252 231;
+    --c-green-950: 240 253 244;
+    --c-amber-50: 42 26 5;
+    --c-amber-100: 74 42 10;
+    --c-amber-200: 120 53 15;
+    --c-amber-300: 146 64 14;
+    --c-amber-400: 180 83 9;
+    --c-amber-500: 217 119 6;
+    --c-amber-600: 251 191 36;
+    --c-amber-700: 252 211 77;
+    --c-amber-800: 253 230 138;
+    --c-amber-900: 254 243 199;
+    --c-amber-950: 255 251 235;
+    --c-red-50: 42 11 11;
+    --c-red-100: 76 20 20;
+    --c-red-200: 127 29 29;
+    --c-red-300: 153 27 27;
+    --c-red-400: 185 28 28;
+    --c-red-500: 239 68 68;
+    --c-red-600: 248 113 113;
+    --c-red-700: 252 165 165;
+    --c-red-800: 254 202 202;
+    --c-red-900: 254 226 226;
+    --c-red-950: 254 242 242;
+    --c-surface: 17 26 43;
+    --c-background: 10 15 28;
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  .theme-switching *,
+  .theme-switching *::before,
+  .theme-switching *::after {
+    transition: none !important;
+  }
+
+  :focus-visible {
+    outline: 2px solid #2b8cee;
+    outline-offset: 2px;
+  }
+
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    overflow: hidden;
+    width: 1em;
+  }
+}
+
+@layer components {
+  .custom-shadow {
+    box-shadow: 0 4px 20px -2px rgb(0 0 0 / 0.05);
+  }
+
+  .segment {
+    @apply cursor-pointer;
+  }
+  .segment > span {
+    @apply block text-center text-sm font-semibold text-slate-500 rounded-full px-3 py-2.5 transition;
+  }
+  .segment input:checked + span {
+    @apply bg-surface text-slate-900 shadow-sm;
+  }
+  .segment input:focus-visible + span {
+    @apply ring-2 ring-primary/40;
+  }
+
+  .chip-button {
+    @apply inline-flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-full bg-surface border border-slate-200 text-slate-700 hover:bg-slate-50 transition;
+  }
+
+  .icon-button {
+    @apply inline-flex items-center justify-center h-9 min-w-[2.25rem] px-2 rounded-full text-slate-600 hover:bg-slate-100 transition;
+  }
+
+  .row-button {
+    @apply inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition;
+  }
+}
+
+#print-sheet {
+  display: none;
+}
+
+@media print {
+  body > *:not(#print-sheet) {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  #print-sheet {
+    display: block !important;
+    color: #000;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  #print-sheet h1 {
+    font-size: 22pt;
+    font-weight: 700;
+    margin-bottom: 12pt;
+  }
+  #print-sheet ol {
+    list-style: none;
+    padding: 0;
+  }
+  #print-sheet li {
+    display: flex;
+    gap: 10pt;
+    align-items: baseline;
+    font-size: 18pt;
+    padding: 5pt 0;
+    border-bottom: 1px solid #ddd;
+    break-inside: avoid;
+  }
+  #print-sheet .num {
+    width: 28pt;
+    color: #666;
+    text-align: right;
+  }
+  #print-sheet .artist {
+    color: #555;
+    font-size: 13pt;
+  }
+  #print-sheet .feat {
+    color: #555;
+    font-size: 12pt;
+    white-space: nowrap;
+  }
+  #print-sheet .note {
+    margin-left: auto;
+    font-weight: 700;
+    font-size: 16pt;
+    border: 1.5px solid #000;
+    border-radius: 6pt;
+    padding: 0 6pt;
+  }
+}

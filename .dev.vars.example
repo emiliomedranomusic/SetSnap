@@ -1,0 +1,42 @@
+# Copia este archivo como .dev.vars para desarrollo local (npm run dev).
+# En producción, estas variables se configuran en Cloudflare Pages
+# (Settings → Variables and Secrets).
+
+# Client ID de tu app en https://developer.spotify.com/dashboard
+# (con PKCE NO se usa el Client Secret)
+SPOTIFY_CLIENT_ID=tu_client_id
+
+# Opcional: activa la lectura de fotos con Gemini (https://aistudio.google.com/)
+# GEMINI_API_KEY=tu_api_key
+# Opcional: modelo a usar primero. Después se prueban gemini-3.5-flash-lite,
+# gemini-3.1-flash-lite, gemini-3.1-flash-lite-preview y gemini-2.5-flash-lite.
+# GEMINI_MODEL=
+
+# Opcional: límites diarios del OCR (por defecto 12 por usuario, 200 en total)
+# OCR_USER_DAILY=12
+# OCR_GLOBAL_DAILY=200
+
+# Opcional: solo estos usuarios de Spotify (IDs separados por coma) pueden usar el OCR
+# ALLOWED_SPOTIFY_USERS=
+
+# Modo sin cuenta: clave para conectar la cuenta central en /api/central/connect?key=...
+# ADMIN_KEY=una-clave-larga
+# CENTRAL_PLAYLISTS_PER_IP=15
+# CENTRAL_PLAYLISTS_DAILY=300
+
+# OCR sin cuenta (0 = solo con sesión de Spotify) y su límite por IP
+# OCR_GUESTS=1
+# OCR_GUEST_DAILY=5
+
+# Lista en YouTube sin login
+# YOUTUBE_API_KEY=
+# YOUTUBE_DAILY_SEARCHES=90
+# YOUTUBE_LISTS_PER_IP=20
+# ODESLI_API_KEY=
+
+# BPM y tonalidad: ReccoBeats no necesita llave; GetSongBPM es el respaldo
+# GETSONGBPM_API_KEY=
+# GETSONGBPM_DAILY=2000
+
+# Botón "Apóyanos" (Ko-fi / Buy Me a Coffee)
+# SUPPORT_URL=https://ko-fi.com/tu-usuario
