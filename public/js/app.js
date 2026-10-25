@@ -201,7 +201,7 @@ function updateMode() {
     els.searchLabel.textContent = !auto ? 'Buscar canciones' : existing ? 'Buscar y agregar' : 'Buscar y crear playlist';
     els.modeHelp.textContent = auto
         ? 'Agrega de una vez las coincidencias seguras. Las dudosas quedan abajo para que las elijas.'
-        : 'Te muestra cada coincidencia para confirmarla antes de crear la playlist.';
+        : 'Te muestra cada coincidencia para confirmarla antes de crear la playlist. El botón para crearla queda fijo abajo.';
     store.set('mode', radioValue('mode'));
 }
 
@@ -291,6 +291,7 @@ async function doSearch() {
         state.busy = false;
         els.searchButton.disabled = false;
         setProgress(null);
+        renderCommitBar();
     }
 }
 

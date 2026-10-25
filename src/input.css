@@ -28,7 +28,7 @@
   .segment {
     @apply cursor-pointer;
   }
-  .segment span {
+  .segment > span {
     @apply block text-center text-sm font-semibold text-slate-500 rounded-full px-3 py-2.5 transition;
   }
   .segment input:checked + span {

@@ -40,6 +40,23 @@ test('base64 de imágenes grandes', () => {
     assert.equal(bytesToBase64(bytes), Buffer.from(bytes).toString('base64'));
 });
 
+test('si un modelo agotó su cuota, pasa al siguiente', async () => {
+    const tried = [];
+    const fetchFn = async (url) => {
+        tried.push(decodeURIComponent(url.split('/models/')[1].split(':')[0]));
+        if (tried[tried.length - 1] === 'gemini-3.5-flash-lite') return Response.json({ error: { message: 'quota' } }, { status: 429 });
+        return Response.json(reply({ items: [{ title: 'Oye' }] }));
+    };
+    const res = await extractSetlistFromImage(new Uint8Array([1]), 'image/jpeg', { apiKey: 'k', fetchFn });
+    assert.deepEqual(tried, ['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']);
+    assert.equal(res.model, 'gemini-3.1-flash-lite');
+});
+
+test('mensaje de saturación si todos los modelos están ocupados', async () => {
+    const fetchFn = async () => Response.json({ error: { message: 'quota' } }, { status: 429 });
+    await assert.rejects(extractSetlistFromImage(new Uint8Array([1]), 'image/jpeg', { apiKey: 'k', fetchFn }), /saturado/);
+});
+
 test('reintenta ante 429 y luego responde', async () => {
     let n = 0;
     const fetchFn = async () => {
@@ -60,8 +77,8 @@ test('si el modelo no existe, prueba el siguiente', async () => {
         return Response.json(reply({ items: [{ title: 'Oye' }] }));
     };
     const res = await extractSetlistFromImage(new Uint8Array([1]), 'image/jpeg', { apiKey: 'k', fetchFn });
-    assert.deepEqual(tried, ['gemini-3.1-flash-lite', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite']);
-    assert.equal(res.model, 'gemini-2.5-flash-lite');
+    assert.deepEqual(tried, ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.1-flash-lite-preview']);
+    assert.equal(res.model, 'gemini-3.1-flash-lite-preview');
 });
 
 test('GEMINI_MODEL va primero y error claro si ninguno existe', async () => {
@@ -72,7 +89,7 @@ test('GEMINI_MODEL va primero y error claro si ninguno existe', async () => {
     };
     await assert.rejects(extractSetlistFromImage(new Uint8Array([1]), 'image/jpeg', { apiKey: 'k', model: 'mi-modelo', fetchFn }), /GEMINI_MODEL/);
     assert.match(tried[0], /mi-modelo/);
-    assert.equal(tried.length, 4);
+    assert.equal(tried.length, 5);
 });
 
 test('si el modelo rechaza la config de thinking, reintenta sin ella', async () => {

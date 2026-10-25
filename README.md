@@ -56,7 +56,7 @@ Si cambias clases de Tailwind en el HTML o JS, `npm run dev` recompila el CSS al
 |---|---|---|
 | `SPOTIFY_CLIENT_ID` | Sí | Client ID de tu app de Spotify. El Client Secret **ya no se usa**. |
 | `GEMINI_API_KEY` | No | Activa la lectura de fotos. Sácala en [Google AI Studio](https://aistudio.google.com/). |
-| `GEMINI_MODEL` | No | Modelo a probar primero. Si no existe, se prueban `gemini-3.1-flash-lite`, `gemini-3.1-flash-lite-preview` y `gemini-2.5-flash-lite`. |
+| `GEMINI_MODEL` | No | Modelo a probar primero. Después se prueban, en orden, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3.1-flash-lite-preview` y `gemini-2.5-flash-lite`. Se pasa al siguiente si uno no existe, está saturado o agotó su cuota. |
 | `OCR_USER_DAILY` | No | Fotos por usuario al día (por defecto 12). |
 | `OCR_GLOBAL_DAILY` | No | Fotos en total al día (por defecto 200). Es el techo de gasto. |
 | `ALLOWED_SPOTIFY_USERS` | No | IDs de usuario de Spotify separados por coma que pueden usar el OCR. Vacío = cualquiera con sesión. |
@@ -68,6 +68,8 @@ Binding de KV: `RATE_LIMIT_KV`. Sin él, los límites solo viven en memoria y no
 Cada foto se reduce en el navegador a 1600 px antes de subirse. Se usa un modelo Flash-Lite con el "thinking" al mínimo y una respuesta JSON que solo trae título, artista y nota. Con los precios publicados en 2026, una foto de setlist cuesta del orden de **una décima de centavo de dólar**. Con el tope por defecto de 200 fotos al día, el peor caso son centavos diarios. Las fotos repetidas salen de caché y no se cobran.
 
 Para ver el consumo real, revisa los logs de la función: cada llamada imprime `[ocr] tokens`.
+
+**Gratis:** con una API key del plan gratuito de Google AI Studio (sin tarjeta), los modelos Flash-Lite tienen cientos de peticiones diarias gratis por modelo, y SetSnap salta al siguiente modelo cuando uno se agota. Con el tope de 200 fotos al día, en la práctica el OCR puede costar $0. La contra: en el plan gratuito Google puede usar las imágenes para mejorar sus productos. Para fotos de setlists no suele importar, pero tenlo en cuenta.
 
 ## Límites de Spotify (importante)
 
