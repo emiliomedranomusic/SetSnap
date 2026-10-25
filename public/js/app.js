@@ -61,6 +61,13 @@ const els = {
     exampleButton: $('example-button'),
     clearButton: $('clear-button'),
     adminSeedButton: $('admin-seed-button'),
+    genOpen: $('gen-open'),
+    generator: $('generator'),
+    genClose: $('gen-close'),
+    genGenres: $('gen-genres'),
+    genSize: $('gen-size'),
+    genRun: $('gen-run'),
+    genAgain: $('gen-again'),
     supportLink: $('support-link'),
 };
 
@@ -423,6 +430,126 @@ async function loadPlaylists() {
         els.existingSelect.innerHTML = `<option value="">${esc(t('existing.failed'))}</option>`;
         handleError(err);
     }
+}
+
+// ---------- generador de setlists por evento ----------
+
+let generatorModule = null; // se carga al abrir el panel (trae el catálogo)
+const gen = { seed: 0, autoName: '', lastText: '' };
+
+async function generatorLib() {
+    generatorModule ||= await import('./generator.js');
+    return generatorModule;
+}
+
+function genEvent() {
+    return radioValue('gen-event') || 'wedding';
+}
+
+function genLangs() {
+    const v = radioValue('gen-lang');
+    return v === 'es' ? ['es'] : v === 'en' ? ['en'] : ['es', 'en'];
+}
+
+function genSelectedGenres() {
+    return [...els.genGenres.querySelectorAll('input:checked')].map((i) => i.value);
+}
+
+async function renderGeneratorOptions({ resetGenres = false } = {}) {
+    const lib = await generatorLib();
+    const { GENRES } = await import('./catalog.js');
+    let selected = resetGenres ? null : genSelectedGenres();
+    if (!resetGenres && !selected.length) {
+        try {
+            selected = JSON.parse(store.get('genGenres') || 'null');
+        } catch {
+            selected = null;
+        }
+    }
+    if (!Array.isArray(selected) || !selected.length) selected = lib.DEFAULT_GENRES[genEvent()];
+    els.genGenres.innerHTML = GENRES.map((g) => `
+        <label class="cursor-pointer">
+            <input type="checkbox" value="${g}" class="peer sr-only"${selected.includes(g) ? ' checked' : ''}>
+            <span class="inline-block rounded-full border border-slate-200 bg-surface px-3 py-1 text-xs font-semibold text-slate-600 peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 transition">${esc(t(`genre.${g}`))}</span>
+        </label>`).join('');
+    const size = Number(els.genSize.value) || Number(store.get('genSize')) || 30;
+    els.genSize.innerHTML = lib.SIZES.map((n) => {
+        const hours = n / 15;
+        const h = hours < 1 ? `${Math.round(hours * 60)} min` : `${hours} h`;
+        return `<option value="${n}"${n === size ? ' selected' : ''}>${esc(t('gen.sizeOption', { n, h }))}</option>`;
+    }).join('');
+}
+
+async function openGenerator() {
+    const event = store.get('genEvent');
+    if (event) {
+        const input = document.querySelector(`input[name="gen-event"][value="${event}"]`);
+        if (input) input.checked = true;
+    }
+    const lang = store.get('genLang');
+    if (lang) {
+        const input = document.querySelector(`input[name="gen-lang"][value="${lang}"]`);
+        if (input) input.checked = true;
+    }
+    await renderGeneratorOptions();
+    els.generator.classList.remove('hidden');
+    els.genOpen.classList.add('hidden');
+    els.generator.querySelector('input:checked')?.focus();
+}
+
+function closeGenerator() {
+    els.generator.classList.add('hidden');
+    els.genOpen.classList.remove('hidden');
+}
+
+function sectionName(id) {
+    return t(`gen.section.${id}`);
+}
+
+async function runGenerator({ again = false } = {}) {
+    const genres = genSelectedGenres();
+    if (!genres.length) {
+        setStatus(esc(t('gen.noGenres')), 'error');
+        return;
+    }
+    const current = els.textarea.value.trim();
+    if (!again && current && current !== gen.lastText && !window.confirm(t('gen.replaceConfirm'))) return;
+
+    const lib = await generatorLib();
+    gen.seed = again ? gen.seed + 1 : Date.now() % 1_000_000;
+    const event = genEvent();
+    const size = Number(els.genSize.value) || 30;
+    const result = lib.generateSetlist({ event, langs: genLangs(), genres, size, seed: gen.seed });
+    const text = lib.setlistText(result, sectionName);
+    els.textarea.value = text;
+    gen.lastText = text;
+
+    // Nombre de la playlist: "Boda - 2026-10-25" si está vacío o lo puso el generador.
+    const name = els.name.value.trim();
+    if (!name || name === gen.autoName) {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        gen.autoName = `${t(`gen.event.${event}`)} - ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        els.name.value = gen.autoName;
+    }
+    store.set('genEvent', event);
+    store.set('genLang', radioValue('gen-lang'));
+    store.set('genGenres', JSON.stringify(genres));
+    store.set('genSize', String(size));
+    saveDraft();
+    updateLineCount();
+    els.genAgain.classList.remove('hidden');
+
+    const detail = result.sections.map((s) => `${s.songs.length} ${sectionName(s.id).toLowerCase()}`).join(' · ');
+    setStatus(esc(t('gen.done', { n: result.total, detail }) + (result.short ? t('gen.short', { n: result.short }) : '')), result.short ? 'info' : 'ok');
+}
+
+function bindGeneratorEvents() {
+    els.genOpen.addEventListener('click', openGenerator);
+    els.genClose.addEventListener('click', closeGenerator);
+    els.genRun.addEventListener('click', () => runGenerator());
+    els.genAgain.addEventListener('click', () => runGenerator({ again: true }));
+    document.querySelectorAll('input[name="gen-event"]').forEach((el) => el.addEventListener('change', () => renderGeneratorOptions({ resetGenres: true })));
 }
 
 // ---------- playlist de Spotify como setlist ----------
@@ -1157,6 +1284,7 @@ function renderLanguage() {
     updateVersion();
     updateLineCount();
     renderChordSettings();
+    if (!els.generator.classList.contains('hidden')) renderGeneratorOptions();
     if (state.results.length) renderResults();
     if (state.created) renderDone({ scroll: false });
     renderShareView();
@@ -1220,6 +1348,7 @@ function watchForUpdates(registration) {
 
 function bindEvents() {
     bindAppEvents();
+    bindGeneratorEvents();
     els.textarea.addEventListener('input', () => {
         updateLineCount();
         saveDraft();

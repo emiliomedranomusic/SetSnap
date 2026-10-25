@@ -12,6 +12,7 @@ Convierte el setlist que te mandaron (texto de WhatsApp, lista impresa o foto es
 - **Playlist nueva o existente**, sin repetir canciones que ya estén.
 - **Para la banda:** link para compartir el setlist (no necesitan cuenta, el setlist va dentro del link), copiar como texto e imprimir / guardar como PDF en letra grande con el tono de cada canción.
 - **Lista en YouTube sin login.** Arma una lista de YouTube con los videos del setlist (sin cuenta). Cada canción se busca una sola vez y queda en caché para todos, para siempre; ~600 éxitos en inglés y español se precargan solos.
+- **Generador de setlists por evento:** eliges boda, fiesta, restaurante/bar o corporativo, idioma (español, inglés o ambos), géneros y duración, y arma el setlist por momentos (p. ej. ceremonia → cóctel y cena → baile que sube → cierre con himnos), sin repetir artista seguido. Sale de un catálogo etiquetado de ~600 canciones (`public/js/catalog.js`); "Otra versión" baraja de nuevo.
 - **Acordes de cada canción** en Cifra Club, Ultimate Guitar, La Cuerda, MuseScore, Songsterr o iReal Pro (eliges los sitios). Son links de búsqueda: sin APIs ni costo. También aparecen en el setlist compartido, para que cada músico los abra.
 - **BPM y tonalidad de cada canción** (de la grabación original), con ReccoBeats y GetSongBPM de respaldo. Salen en la revisión, el setlist compartido, la hoja impresa, el texto copiado y el CSV. Cada canción se consulta una sola vez y queda en caché para todos.
 - **Versión karaoke o instrumental:** busca esas versiones en Spotify (y videos karaoke en YouTube) en vez de la original. La banda sigue viendo el nombre original de cada canción.
@@ -42,7 +43,9 @@ functions/              Cloudflare Pages Functions (lo único con servidor)
 lib/gemini.js           Llamada a Gemini (REST, sin SDK)
   api/admin/seed.js     Precarga de la caché de YouTube (administrador)
 lib/server/             Cuenta central, YouTube, precarga y utilidades (KV, límites)
-data/seed-songs.js      Canciones famosas que se precargan
+public/js/catalog.js    Catálogo etiquetado (idioma, género, energía, románticas, himnos)
+public/js/generator.js  Generador de setlists por evento
+data/seed-songs.js      Lista de precarga (sale del catálogo)
 .github/workflows/      Tarea nocturna de precarga
 test/                   Tests (node --test)
 ```
@@ -121,7 +124,7 @@ Para encontrar el video de cada canción:
 - Si hay `ODESLI_API_KEY`, se convierte el track de Spotify a YouTube con Odesli (sin gastar cuota).
 - Si no, se busca con la API de YouTube: la cuota gratis da ~100 búsquedas al día.
 - **En ambos casos cada canción se busca una sola vez** y el resultado queda en KV **para siempre**, para todos. Cada 6 meses se comprueba que el video siga existiendo (cuesta 1 unidad de cuota por cada 50 videos) y solo si lo borraron se vuelve a buscar.
-- **Precarga:** `data/seed-songs.js` trae ~600 canciones famosas en inglés y español (repertorio de eventos). Cada noche, `.github/workflows/seed-youtube.yml` llama a `/api/admin/seed`, que usa las búsquedas que sobraron del día (dejando una reserva para los usuarios). Con ~70 búsquedas libres al día, la lista completa queda en caché en unos 9 días. Para agregar tus propias canciones: abre `https://TU-DOMINIO/?admin` una vez en tu celular (queda activado en ese dispositivo), conecta tu Spotify, pega el link de tu playlist y toca **"Comparar con la precarga"**: te dice cuáles ya estaban y agrega las nuevas. También sirve pegar texto. `/?admin=0` lo desactiva.
+- **Precarga:** el catálogo (`public/js/catalog.js`) trae ~600 canciones famosas en inglés y español (repertorio de eventos). Cada noche, `.github/workflows/seed-youtube.yml` llama a `/api/admin/seed`, que usa las búsquedas que sobraron del día (dejando una reserva para los usuarios). Con ~70 búsquedas libres al día, la lista completa queda en caché en unos 9 días. Para agregar tus propias canciones: abre `https://TU-DOMINIO/?admin` una vez en tu celular (queda activado en ese dispositivo), conecta tu Spotify, pega el link de tu playlist y toca **"Comparar con la precarga"**: te dice cuáles ya estaban y agrega las nuevas. También sirve pegar texto. `/?admin=0` lo desactiva.
 - La cuota de YouTube se reinicia a medianoche hora del Pacífico; el contador de SetSnap usa ese mismo día.
 
 ## Límites de Spotify (importante)
