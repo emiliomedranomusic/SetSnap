@@ -10,7 +10,7 @@
     "build": "npm run build:css",
     "build:css": "tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --minify",
     "dev:css": "tailwindcss -i ./src/input.css -o ./public/css/tailwind.css --watch",
-    "dev": "npm run build:css && wrangler pages dev public --kv RATE_LIMIT_KV --ip 127.0.0.1 --port 8788",
+    "dev": "npm run build:css && wrangler pages dev public --kv SETSNAP_KV --ip 127.0.0.1 --port 8788",
     "start": "npm run dev",
     "test": "node --test test/*.test.js"
   },

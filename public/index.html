@@ -85,7 +85,7 @@
                             placeholder="Opcional">
                     </div>
                 </div>
-                <label class="flex items-center gap-3 cursor-pointer w-fit">
+                <label id="public-toggle" class="flex items-center gap-3 cursor-pointer w-fit">
                     <span class="relative inline-flex items-center">
                         <input type="checkbox" id="playlist-public" class="sr-only peer">
                         <span class="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 transition"></span>
@@ -125,6 +125,9 @@
                     <span class="material-symbols-outlined text-xl">search</span>
                     <span id="search-label">Buscar canciones</span>
                 </button>
+                <p id="guest-note" class="hidden text-xs text-slate-500 text-center mt-3 leading-relaxed">
+                    No necesitas cuenta: la playlist se crea en el perfil de SetSnap y te damos el link para guardarla o copiarla a tu Spotify.
+                </p>
                 <div id="login-box" class="hidden flex-col items-center">
                     <button id="login-button" type="button"
                         class="w-full h-14 bg-spotify-green text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition">
@@ -159,6 +162,7 @@
             <div class="flex flex-wrap gap-2 mb-4 px-1">
                 <button type="button" data-action="share" class="chip-button"><span class="material-symbols-outlined text-base">group</span>Compartir con la banda</button>
                 <button type="button" data-action="copy-text" class="chip-button"><span class="material-symbols-outlined text-base">content_copy</span>Copiar como texto</button>
+                <button type="button" data-action="youtube" class="chip-button hidden"><span class="material-symbols-outlined text-base">smart_display</span>Lista en YouTube</button>
                 <button type="button" data-action="print" class="chip-button"><span class="material-symbols-outlined text-base">print</span>Imprimir / PDF</button>
                 <button type="button" data-action="reset" class="chip-button"><span class="material-symbols-outlined text-base">restart_alt</span>Empezar de nuevo</button>
             </div>

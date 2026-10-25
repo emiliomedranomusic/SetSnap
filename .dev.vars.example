@@ -18,3 +18,18 @@ SPOTIFY_CLIENT_ID=tu_client_id
 
 # Opcional: solo estos usuarios de Spotify (IDs separados por coma) pueden usar el OCR
 # ALLOWED_SPOTIFY_USERS=
+
+# Modo sin cuenta: clave para conectar la cuenta central en /api/central/connect?key=...
+# ADMIN_KEY=una-clave-larga
+# CENTRAL_PLAYLISTS_PER_IP=15
+# CENTRAL_PLAYLISTS_DAILY=300
+
+# OCR sin cuenta (0 = solo con sesión de Spotify) y su límite por IP
+# OCR_GUESTS=1
+# OCR_GUEST_DAILY=5
+
+# Lista en YouTube sin login
+# YOUTUBE_API_KEY=
+# YOUTUBE_DAILY_SEARCHES=90
+# YOUTUBE_LISTS_PER_IP=20
+# ODESLI_API_KEY=

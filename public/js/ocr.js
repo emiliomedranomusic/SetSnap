@@ -1,4 +1,4 @@
-import { getAccessToken } from './spotify.js';
+import { getAccessToken, isLoggedIn } from './spotify.js';
 
 const MAX_SIDE = 1600;
 const JPEG_QUALITY = 0.85;
@@ -36,14 +36,15 @@ export async function shrinkImage(file) {
  * como texto "Canción - Artista (nota)".
  */
 export async function extractSetlistText(file) {
-    const token = await getAccessToken();
+    // Con sesión, el límite es por cuenta; sin sesión (modo sin cuenta), por IP.
+    const token = isLoggedIn() ? await getAccessToken() : null;
     const image = await shrinkImage(file);
     const form = new FormData();
     form.append('image', image, 'setlist.jpg');
 
     const res = await fetch('/api/extract-setlist', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
     });
     const data = await res.json().catch(() => ({}));

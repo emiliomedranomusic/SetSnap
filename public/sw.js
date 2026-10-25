@@ -4,7 +4,7 @@
  * - Recibe "Compartir → SetSnap" (Web Share Target) desde WhatsApp, Fotos, etc.
  * Nunca intercepta llamadas a /api ni a Spotify/Google.
  */
-const VERSION = 'setsnap-v3';
+const VERSION = 'setsnap-v4';
 const SHARE_CACHE = 'setsnap-share';
 const SHELL = [
     '/',
@@ -14,6 +14,7 @@ const SHELL = [
     '/js/scoring.js',
     '/js/search.js',
     '/js/spotify.js',
+    '/js/guest.js',
     '/js/ocr.js',
     '/js/share.js',
     '/manifest.json',

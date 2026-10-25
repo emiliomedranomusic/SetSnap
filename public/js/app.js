@@ -2,6 +2,7 @@ import { parseSetlist, parseLine } from './parser.js';
 import { MANUAL_THRESHOLD } from './scoring.js';
 import { searchAll, searchItem } from './search.js';
 import * as spotify from './spotify.js';
+import * as guest from './guest.js';
 import { extractSetlistText } from './ocr.js';
 import { buildShareUrl, decodeSetlist, setlistToText } from './share.js';
 
@@ -30,6 +31,10 @@ const els = {
     searchLabel: $('search-label'),
     loginBox: $('login-box'),
     loginButton: $('login-button'),
+    guestNote: $('guest-note'),
+    publicToggle: $('public-toggle'),
+    destinationExisting: document.querySelector('input[name="destination"][value="existing"]'),
+    destinationNew: document.querySelector('input[name="destination"][value="new"]'),
     status: $('status'),
     progress: $('progress'),
     progressBar: $('progress-bar'),
@@ -46,7 +51,7 @@ const els = {
 };
 
 const state = {
-    config: { spotifyClientId: null, ocrEnabled: false },
+    config: { spotifyClientId: null, centralEnabled: false, ocrEnabled: false, ocrGuests: false, youtubeEnabled: false },
     me: null,
     results: [],
     created: null, // { id, url, name, added: Set<uri>, existing, alreadyThere }
@@ -134,18 +139,52 @@ function handleError(err) {
 
 // ---------- cuenta ----------
 
+/** Sin sesión pero con cuenta central: se usa la cuenta de SetSnap. */
+function isGuest() {
+    return !spotify.isLoggedIn() && state.config.centralEnabled;
+}
+
+function canSearch() {
+    return spotify.isLoggedIn() || state.config.centralEnabled;
+}
+
+function canOcr() {
+    return state.config.ocrEnabled && (spotify.isLoggedIn() || state.config.ocrGuests);
+}
+
+function searchFn() {
+    return spotify.isLoggedIn() ? spotify.searchTracks : guest.searchTracks;
+}
+
 function renderAccount() {
     const loggedIn = spotify.isLoggedIn();
-    els.searchButton.classList.toggle('hidden', !loggedIn);
-    els.loginBox.classList.toggle('hidden', loggedIn);
-    els.loginBox.classList.toggle('flex', !loggedIn);
-    const ocr = loggedIn && state.config.ocrEnabled;
+    const guestMode = isGuest();
+    const showLoginBox = !loggedIn && !guestMode;
+    els.searchButton.classList.toggle('hidden', !canSearch());
+    els.loginBox.classList.toggle('hidden', !showLoginBox);
+    els.loginBox.classList.toggle('flex', showLoginBox);
+    els.guestNote.classList.toggle('hidden', !guestMode);
+    els.publicToggle.classList.toggle('hidden', guestMode);
+    document.querySelectorAll('[data-action="youtube"]').forEach((b) => b.classList.toggle('hidden', !state.config.youtubeEnabled));
+    const ocr = canOcr();
     els.ocrControls.classList.toggle('hidden', !ocr);
     els.ocrControls.classList.toggle('flex', ocr);
     els.ocrHint.classList.toggle('hidden', !ocr);
 
+    // Agregar a una playlist existente requiere la cuenta de la persona.
+    els.destinationExisting.disabled = !loggedIn;
+    els.destinationExisting.closest('label').classList.toggle('opacity-40', !loggedIn);
+    els.destinationExisting.closest('label').title = loggedIn ? '' : 'Conecta tu Spotify para agregar a tus playlists';
+    if (!loggedIn && els.destinationExisting.checked) {
+        els.destinationNew.checked = true;
+        updateDestination();
+    }
+
     if (!loggedIn) {
-        els.account.innerHTML = '';
+        els.account.innerHTML = state.config.spotifyClientId && guestMode
+            ? '<button type="button" id="header-login" class="row-button">Usar mi Spotify</button>'
+            : '';
+        $('header-login')?.addEventListener('click', login);
         return;
     }
     const name = state.me?.display_name || state.me?.id || 'Spotify';
@@ -242,7 +281,7 @@ async function doSearch() {
         setStatus('Pega al menos una canción en el setlist.', 'error');
         return;
     }
-    if (!spotify.isLoggedIn()) {
+    if (!canSearch()) {
         setStatus('Conecta tu cuenta de Spotify primero.', 'error');
         return;
     }
@@ -260,7 +299,7 @@ async function doSearch() {
     setProgress(0, items.length);
 
     try {
-        const results = await searchAll(items, spotify.searchTracks, (done, total) => {
+        const results = await searchAll(items, searchFn(), (done, total) => {
             setProgress(done, total);
             setStatus(`Buscando… ${done}/${total}`);
         });
@@ -333,7 +372,7 @@ async function researchRow(idx, text) {
     row.searching = true;
     renderResults();
     try {
-        const res = await searchItem(parsed, spotify.searchTracks);
+        const res = await searchItem(parsed, searchFn());
         Object.assign(row, {
             title: parsed.title,
             artist: parsed.artist,
@@ -528,6 +567,25 @@ async function commit({ onlyFound = false } = {}) {
                 pending = pending.filter((u) => !target.added.has(u));
                 target.alreadyThere = before - pending.length;
             }
+        } else if (!target && isGuest()) {
+            if (!pending.length) throw new Error('No hubo coincidencias seguras para crear la playlist. Elige las canciones abajo y pulsa Crear.');
+            setStatus('Creando la playlist…');
+            const playlist = await guest.createPlaylist({
+                name: els.name.value.trim() || defaultPlaylistName(),
+                description: els.description.value.trim(),
+                uris: pending,
+            });
+            target = {
+                id: playlist.id,
+                name: playlist.name,
+                url: playlist.url,
+                added: new Set(pending),
+                existing: false,
+                alreadyThere: 0,
+                guest: true,
+                editToken: playlist.editToken,
+            };
+            pending = [];
         } else if (!target) {
             setStatus('Creando la playlist…');
             const name = els.name.value.trim() || defaultPlaylistName();
@@ -542,7 +600,8 @@ async function commit({ onlyFound = false } = {}) {
         state.created = target;
         if (pending.length) {
             setStatus(`Agregando ${pending.length} canciones…`);
-            await spotify.addItems(target.id, pending);
+            if (target.guest) await guest.addItems(target.id, target.editToken, pending);
+            else await spotify.addItems(target.id, pending);
             pending.forEach((u) => target.added.add(u));
         }
         target.lastAdded = pending.length;
@@ -575,7 +634,12 @@ function renderDone() {
             </div>
             ${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-spotify-green text-white text-sm font-semibold no-underline hover:opacity-90">
                 <span class="material-symbols-outlined text-lg">open_in_new</span>Abrir en Spotify</a>` : ''}
-        </div>`;
+        </div>
+        ${t.guest ? `
+        <div class="mt-4 pt-4 border-t border-green-200 text-xs text-green-900 leading-relaxed">
+            <p class="font-semibold mb-1">¿La quieres en tu cuenta para editarla?</p>
+            <p>La playlist está en el perfil de SetSnap. Ábrela en Spotify, toca <b>⋯</b> → <b>Agregar a otra playlist</b> → <b>Nueva playlist</b> y tendrás tu propia copia. También puedes darle a <b>Guardar</b> (+) para tenerla en tu biblioteca tal cual.</p>
+        </div>` : ''}`;
     els.donePanel.classList.remove('hidden');
     setStatus('');
     els.donePanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -597,6 +661,34 @@ function currentSetlist() {
         playlistUrl: state.created?.url || '',
         songs,
     };
+}
+
+async function openYouTube(setlist) {
+    if (!setlist.songs.length) {
+        setStatus('No hay canciones para armar la lista.', 'error');
+        return;
+    }
+    setStatus('<span class="animate-pulse">Buscando los videos en YouTube…</span>');
+    try {
+        const { urls, found, total, limited } = await guest.youtubeLists(setlist.songs);
+        if (!urls.length) {
+            setStatus(limited
+                ? 'Se acabaron las búsquedas de YouTube de hoy. Las canciones que ya alguien buscó salen al instante; intenta mañana con las demás.'
+                : 'No encontré videos para estas canciones.', 'error');
+            return;
+        }
+        const links = urls
+            .map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-red-600 text-white text-sm font-semibold no-underline hover:opacity-90"><span class="material-symbols-outlined text-lg">smart_display</span>Abrir en YouTube${urls.length > 1 ? ` (parte ${i + 1})` : ''}</a>`)
+            .join(' ');
+        const missing = total - found;
+        const note = missing
+            ? `<p class="text-xs text-slate-500 mt-2">${missing} de ${total} sin video${limited ? ' (se acabaron las búsquedas de hoy)' : ''}.</p>`
+            : '';
+        setStatus(`<div class="flex flex-wrap justify-center gap-2">${links}</div>${note}<p class="text-xs text-slate-500 mt-2">YouTube la abre como lista sin nombre. Para conservarla, guárdala desde YouTube.</p>`, 'info');
+        els.status.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+        handleError(err);
+    }
 }
 
 async function copyText(text, okMessage) {
@@ -661,6 +753,7 @@ async function showShareView(code) {
                 ${setlist.playlistUrl ? `<a href="${esc(setlist.playlistUrl)}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-spotify-green text-white text-sm font-semibold no-underline hover:opacity-90"><span class="material-symbols-outlined text-lg">play_circle</span>Abrir playlist</a>` : ''}
                 <button type="button" data-share="print" class="chip-button"><span class="material-symbols-outlined text-base">print</span>Imprimir / PDF</button>
                 <button type="button" data-share="copy" class="chip-button"><span class="material-symbols-outlined text-base">content_copy</span>Copiar texto</button>
+                ${state.config.youtubeEnabled ? '<button type="button" data-share="youtube" class="chip-button"><span class="material-symbols-outlined text-base">smart_display</span>Escuchar en YouTube</button>' : ''}
                 <button type="button" data-share="use" class="chip-button"><span class="material-symbols-outlined text-base">edit</span>Usar en SetSnap</button>
             </div>
             <ol class="mt-6 divide-y divide-slate-100">
@@ -680,6 +773,7 @@ async function showShareView(code) {
         const action = e.target.closest('[data-share]')?.dataset.share;
         if (action === 'print') printSetlist(setlist);
         if (action === 'copy') copyText(setlistToText(setlist), 'Setlist copiado.');
+        if (action === 'youtube') openYouTube(setlist);
         if (action === 'use') {
             els.textarea.value = setlist.songs
                 .map((x) => `${x.title}${x.artist ? ` - ${x.artist}` : ''}${x.note ? ` (${x.note})` : ''}`)
@@ -702,7 +796,7 @@ async function runOcr(file) {
         setStatus('La lectura de fotos no está activada en este servidor.', 'error');
         return;
     }
-    if (!spotify.isLoggedIn()) {
+    if (!canOcr()) {
         setStatus('Conecta tu cuenta de Spotify para leer fotos de setlists.', 'error');
         return;
     }
@@ -748,7 +842,7 @@ async function consumeSharedContent() {
         }
         const imageRes = await cache.match('/shared-image');
         if (imageRes) {
-            if (!spotify.isLoggedIn() || !state.config.ocrEnabled) {
+            if (!canOcr()) {
                 setStatus('Recibí una imagen. Conecta Spotify para leerla.', 'info');
                 return;
             }
@@ -782,7 +876,7 @@ function bindEvents() {
 
     document.addEventListener('paste', (e) => {
         const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
-        if (file && state.config.ocrEnabled && spotify.isLoggedIn()) {
+        if (file && canOcr()) {
             e.preventDefault();
             runOcr(file);
         }
@@ -846,6 +940,7 @@ function bindEvents() {
         if (action === 'share') shareSetlist(currentSetlist()).catch(handleError);
         if (action === 'copy-text') copyText(setlistToText(currentSetlist()), 'Setlist copiado como texto.');
         if (action === 'print') printSetlist(currentSetlist());
+        if (action === 'youtube') openYouTube(currentSetlist());
         if (action === 'reset') reset();
     });
 }

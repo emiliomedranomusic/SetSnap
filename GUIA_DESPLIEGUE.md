@@ -15,7 +15,7 @@ SetSnap ya no necesita un servidor Node prendido todo el tiempo. Es un sitio est
    - **Build output directory:** `public`
 5. Dale a **Save and Deploy**. Te dará una URL como `https://setsnap.pages.dev`.
 
-La carpeta `functions/` se detecta sola: Cloudflare publica `/api/config`, `/api/extract-setlist` y `/share-target` sin configurar nada más.
+La carpeta `functions/` se detecta sola: Cloudflare publica `/api/...` y `/share-target` sin configurar nada más.
 
 ## Paso 2: Variables
 
@@ -25,19 +25,21 @@ En el proyecto, ve a **Settings → Variables and Secrets** y agrega:
 |---|---|---|
 | `SPOTIFY_CLIENT_ID` | El Client ID de tu app de Spotify | Texto |
 | `GEMINI_API_KEY` | Tu API key de Google AI Studio (opcional, para fotos) | **Secret** |
+| `ADMIN_KEY` | Una clave larga que solo tú sepas (para el modo sin cuenta) | **Secret** |
+| `YOUTUBE_API_KEY` | API key de YouTube (opcional, ver Paso 6) | **Secret** |
 
-Opcionales: `OCR_USER_DAILY`, `OCR_GLOBAL_DAILY`, `GEMINI_MODEL`, `ALLOWED_SPOTIFY_USERS` (ver README).
+Opcionales: límites y modelos (ver la tabla del README).
 
 **Ya no hace falta** `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI` ni `SESSION_SECRET`. Si los tenías en Render, no los copies.
 
-## Paso 3: Límites del OCR (KV)
+## Paso 3: Almacenamiento (KV)
 
-Para que los límites diarios de fotos funcionen de verdad y el gasto de Gemini tenga techo:
+Aquí se guardan la llave de la cuenta central, los límites diarios y la caché de YouTube y del OCR:
 
-1. Entra a **Storage & Databases → KV** (o **Workers & Pages → KV**) y crea un namespace llamado `setsnap-ocr`.
+1. Entra a **Storage & Databases → KV** (o **Workers & Pages → KV**) y crea un namespace llamado `setsnap`.
 2. En el proyecto, ve a **Settings → Bindings → Add → KV namespace**:
-   - **Variable name:** `RATE_LIMIT_KV`
-   - **KV namespace:** `setsnap-ocr`
+   - **Variable name:** `SETSNAP_KV`
+   - **KV namespace:** `setsnap`
 3. Vuelve a desplegar (**Deployments → Retry deployment**) para que tome las variables y el binding.
 
 ## Paso 4: Spotify
@@ -47,7 +49,26 @@ Para que los límites diarios de fotos funcionen de verdad y el gasto de Gemini 
 3. En **User Management** agrega el nombre y el email de cada persona que vaya a usar la app (tú, tu banda). En Development Mode solo esas cuentas pueden conectarse, y el dueño de la app necesita Spotify Premium.
 4. Puedes borrar la Redirect URI vieja de Render (`.../callback/spotify`).
 
-## Paso 5: Instalar en el celular
+## Paso 5: Modo sin cuenta (cuenta central)
+
+Así cualquiera puede usar SetSnap sin registrarse: las playlists se crean en una cuenta de SetSnap y la persona recibe el link.
+
+1. Crea un Gmail nuevo (por ejemplo `setsnap.playlists@gmail.com`) y con él una cuenta **gratis** de Spotify.
+2. En el Dashboard de Spotify → tu app → **User Management**, agrega esa cuenta (nombre y email).
+3. En **Settings → Redirect URIs** agrega `https://setsnap.pages.dev/api/central/callback` (con tu dominio).
+4. Abre una **ventana de incógnito**, entra a open.spotify.com con la cuenta nueva, y luego abre `https://setsnap.pages.dev/api/central/connect?key=TU_ADMIN_KEY`. Acepta los permisos.
+5. Debe aparecer "¡Cuenta central conectada!". Desde ese momento, SetSnap muestra "No necesitas cuenta" y el botón "Usar mi Spotify" queda como opción.
+6. Para revisarla cuando quieras: `https://setsnap.pages.dev/api/central/status?key=TU_ADMIN_KEY`.
+
+## Paso 6 (opcional): Lista en YouTube
+
+1. Entra a [console.cloud.google.com](https://console.cloud.google.com/), crea un proyecto y en **APIs & Services → Library** habilita **YouTube Data API v3**.
+2. En **Credentials → Create credentials → API key**. En "API restrictions" limítala a YouTube Data API v3.
+3. Ponla en Cloudflare como `YOUTUBE_API_KEY` (Secret) y vuelve a desplegar.
+
+La cuota gratis da ~100 búsquedas nuevas al día; cada canción se busca una sola vez y queda guardada para todos. Si consigues una llave de Odesli (song.link), ponla como `ODESLI_API_KEY` y ya no se gasta cuota de YouTube.
+
+## Paso 7: Instalar en el celular
 
 Abre la URL en el celular y usa **"Agregar a pantalla de inicio"** (en Android también aparece el botón "Instalar"). Una vez instalada en Android, SetSnap aparece en el menú **Compartir** de WhatsApp y la galería: compartes el mensaje o la foto del setlist y se carga sola.
 

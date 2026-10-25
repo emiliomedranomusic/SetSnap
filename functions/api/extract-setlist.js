@@ -1,32 +1,16 @@
 /**
  * POST /api/extract-setlist  (multipart, campo "image")
- * Header: Authorization: Bearer <token de Spotify del usuario>
+ * Header opcional: Authorization: Bearer <token de Spotify del usuario>
  *
- * Solo usuarios con sesión de Spotify válida pueden usar el OCR. Límites
- * diarios por usuario y globales en Workers KV (binding RATE_LIMIT_KV) para
+ * Con sesión de Spotify: límite diario por usuario. Sin sesión (modo sin
+ * cuenta): límite diario por IP, más bajo. Además hay un tope global para
  * que el costo de Gemini tenga techo; imágenes repetidas salen de caché.
  */
 import { extractSetlistFromImage } from '../../lib/gemini.js';
+import { kvStore, safePut, json, clientIp, today, sha256Hex, dailyLimits, intEnv } from '../../lib/server/common.js';
 
 const MAX_BYTES = 6 * 1024 * 1024;
-const DAY_TTL = 2 * 24 * 60 * 60;
 const CACHE_TTL = 30 * 24 * 60 * 60;
-
-// Respaldo si no hay KV configurado: solo vive mientras dure el isolate.
-const memory = new Map();
-
-function store(env) {
-    const kv = env.RATE_LIMIT_KV;
-    if (kv) return kv;
-    return {
-        async get(key) { return memory.get(key) ?? null; },
-        async put(key, value) { memory.set(key, value); },
-    };
-}
-
-function json(status, body) {
-    return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-}
 
 async function spotifyUserId(request) {
     const auth = request.headers.get('Authorization') || '';
@@ -37,21 +21,18 @@ async function spotifyUserId(request) {
     return me?.id || null;
 }
 
-async function sha256Hex(bytes) {
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 export async function onRequestPost({ request, env }) {
     if (!env.GEMINI_API_KEY) {
         return json(503, { success: false, message: 'El OCR no está configurado (falta GEMINI_API_KEY).' });
     }
 
     const userId = await spotifyUserId(request);
-    if (!userId) return json(401, { success: false, needsLogin: true, message: 'Conecta tu cuenta de Spotify para usar el OCR.' });
-
+    const guestsAllowed = env.OCR_GUESTS !== '0';
+    if (!userId && !guestsAllowed) {
+        return json(401, { success: false, needsLogin: true, message: 'Conecta tu cuenta de Spotify para usar el OCR.' });
+    }
     const allowed = (env.ALLOWED_SPOTIFY_USERS || '').split(',').map((s) => s.trim()).filter(Boolean);
-    if (allowed.length && !allowed.includes(userId)) {
+    if (userId && allowed.length && !allowed.includes(userId)) {
         return json(403, { success: false, message: 'Tu cuenta no tiene acceso al OCR.' });
     }
 
@@ -69,32 +50,28 @@ export async function onRequestPost({ request, env }) {
     if (!mimeType.startsWith('image/')) return json(415, { success: false, message: 'El archivo debe ser una imagen.' });
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const kv = store(env);
-    const hash = await sha256Hex(bytes);
-    const cacheKey = `ocr:img:${hash}`;
-
+    const kv = kvStore(env);
+    const cacheKey = `ocr:img:${await sha256Hex(bytes)}`;
     const cached = await kv.get(cacheKey);
     if (cached) return json(200, { success: true, items: JSON.parse(cached), cached: true });
 
-    const day = new Date().toISOString().slice(0, 10);
-    const userKey = `ocr:u:${userId}:${day}`;
-    const globalKey = `ocr:g:${day}`;
-    const userLimit = Number(env.OCR_USER_DAILY) || 12;
-    const globalLimit = Number(env.OCR_GLOBAL_DAILY) || 200;
-    const [userCount, globalCount] = (await Promise.all([kv.get(userKey), kv.get(globalKey)])).map((v) => Number(v) || 0);
-
-    if (globalCount >= globalLimit) {
+    const day = today();
+    const personal = userId
+        ? { name: 'person', key: `ocr:u:${userId}:${day}`, max: intEnv(env.OCR_USER_DAILY, 12) }
+        : { name: 'person', key: `ocr:ip:${clientIp(request)}:${day}`, max: intEnv(env.OCR_GUEST_DAILY, 5) };
+    const limits = await dailyLimits(kv, [
+        personal,
+        { name: 'global', key: `ocr:g:${day}`, max: intEnv(env.OCR_GLOBAL_DAILY, 200) },
+    ]);
+    if (limits.exceeded === 'global') {
         return json(429, { success: false, message: 'El OCR llegó a su límite diario. Intenta mañana o pega el texto.' });
     }
-    if (userCount >= userLimit) {
-        return json(429, { success: false, message: `Llegaste a tu límite de ${userLimit} imágenes por día. Intenta mañana o pega el texto.` });
+    if (limits.exceeded) {
+        return json(429, { success: false, message: `Llegaste a tu límite de ${personal.max} fotos por día. Intenta mañana o pega el texto.` });
     }
 
     // Se cuenta antes de llamar: Gemini cobra aunque la respuesta salga mal.
-    await Promise.all([
-        kv.put(userKey, String(userCount + 1), { expirationTtl: DAY_TTL }),
-        kv.put(globalKey, String(globalCount + 1), { expirationTtl: DAY_TTL }),
-    ]);
+    await limits.add(1);
 
     try {
         const { items, usage, model } = await extractSetlistFromImage(bytes, mimeType, {
@@ -102,8 +79,8 @@ export async function onRequestPost({ request, env }) {
             model: env.GEMINI_MODEL || undefined,
         });
         if (usage) console.log('[ocr] tokens', model, JSON.stringify(usage));
-        if (items.length) await kv.put(cacheKey, JSON.stringify(items), { expirationTtl: CACHE_TTL });
-        return json(200, { success: true, items, remaining: Math.max(0, userLimit - userCount - 1) });
+        if (items.length) await safePut(kv, cacheKey, JSON.stringify(items), { expirationTtl: CACHE_TTL });
+        return json(200, { success: true, items, remaining: Math.max(0, limits.remaining('person') - 1) });
     } catch (err) {
         console.error('[ocr] error', err.message);
         return json(502, { success: false, message: err.message || 'No se pudo procesar la imagen.' });
