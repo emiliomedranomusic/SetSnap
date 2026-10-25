@@ -8,6 +8,11 @@ export const MANUAL_THRESHOLD = 50;
 
 // Versiones que casi nunca son las que busca un músico, salvo que las pida.
 const UNWANTED_VERSION_RE = /\b(karaoke|instrumental|originally performed|in the style of|made famous|tribute|cover|backing track|pista|8[\s-]?bit|lullaby|cuna)\b/;
+// Lo que se busca en modo karaoke / instrumental (version del item).
+const WANTED_VERSION_RE = {
+    karaoke: /\b(karaoke|sing along|singalong|originally performed|in the style of|made famous|backing track|pista)\b/,
+    instrumental: /\b(instrumental|karaoke|backing track|pista)\b/,
+};
 // Versiones válidas pero que no son la de estudio: solo desempatan.
 const ALT_VERSION_RE = /\b(live|en vivo|ao vivo|acoustic|acustic[oa]|unplugged|remix|demo|session|sped up|slowed)\b/;
 
@@ -80,9 +85,33 @@ function artistNames(track) {
 }
 
 /**
+ * Modo karaoke/instrumental: se premia la versión pedida y se castiga la
+ * original. Los karaokes suelen venir de otro "artista" (p. ej. "Sing King")
+ * y nombrar al original en el título ("Originally Performed by Radiohead").
+ */
+function scoreVersion(title, artist, track, version) {
+    const trackTitle = track.name || '';
+    const names = artistNames(track);
+    const hay = normalizeForMatch(`${trackTitle} ${track.album?.name || ''} ${names.join(' ')}`);
+    const titleScore = similarityPercent(title, trackTitle);
+    let artistScore = 0;
+    if (artist) {
+        const nArtist = normalizeTokens(artist);
+        artistScore = Math.max(0, ...names.map((n) => similarityPercent(artist, n)), nArtist && hay.includes(nArtist) ? 100 : 0);
+    }
+    let score = artist ? 0.7 * titleScore + 0.3 * artistScore : titleScore;
+    if (normalizeTokens(title) === normalizeTokens(trackTitle)) score += 5;
+    const wanted = WANTED_VERSION_RE[version];
+    score = Math.min(100, score + (wanted.test(hay) ? 10 : -35));
+    if (version === 'instrumental' && /\binstrumental\b/.test(hay)) score = Math.min(100, score + 3);
+    return { score: Math.round(Math.max(0, score)), titleScore, artistScore };
+}
+
+/**
  * Puntúa un track asumiendo una orientación concreta (title/artist).
  */
-function scoreOriented(title, artist, track) {
+function scoreOriented(title, artist, track, version) {
+    if (WANTED_VERSION_RE[version]) return scoreVersion(title, artist, track, version);
     const trackTitle = track.name || '';
     const titleScore = similarityPercent(title, trackTitle);
     const names = artistNames(track);
@@ -119,13 +148,14 @@ function scoreOriented(title, artist, track) {
 export function scoreTrack(item, track) {
     const title = item.title || '';
     const artist = item.artist || '';
-    let direct = scoreOriented(title, artist, track);
+    const v = item.version;
+    let direct = scoreOriented(title, artist, track, v);
     if (item.whole) {
-        const asTitle = scoreOriented(item.whole, '', track);
+        const asTitle = scoreOriented(item.whole, '', track, v);
         if (asTitle.score > direct.score) direct = asTitle;
     }
     if (!artist || item.ordered) return { ...direct, flipped: false };
-    const flipped = scoreOriented(artist, title, track);
+    const flipped = scoreOriented(artist, title, track, v);
     return flipped.score > direct.score ? { ...flipped, flipped: true } : { ...direct, flipped: false };
 }
 

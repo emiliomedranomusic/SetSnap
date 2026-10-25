@@ -154,6 +154,17 @@
                 <p id="mode-help" class="text-xs text-slate-500 mt-2 ml-1"></p>
             </fieldset>
 
+            <!-- Versión: original, karaoke o instrumental -->
+            <fieldset class="mt-6">
+                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2" data-i18n="version.legend"></legend>
+                <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-full" role="radiogroup">
+                    <label class="segment"><input type="radio" name="version" value="original" class="sr-only" checked><span data-i18n="version.original"></span></label>
+                    <label class="segment"><input type="radio" name="version" value="karaoke" class="sr-only"><span data-i18n="version.karaoke"></span></label>
+                    <label class="segment"><input type="radio" name="version" value="instrumental" class="sr-only"><span data-i18n="version.instrumental"></span></label>
+                </div>
+                <p id="version-help" class="hidden text-xs text-slate-500 mt-2 ml-1"></p>
+            </fieldset>
+
             <div class="mt-6">
                 <button id="search-button" type="button"
                     class="w-full h-14 bg-slate-900 text-surface font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
@@ -198,6 +209,7 @@
                 <button type="button" data-action="print" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">print</span><span data-i18n="results.print"></span></button>
                 <button type="button" data-action="reset" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">restart_alt</span><span data-i18n="results.reset"></span></button>
             </div>
+            <div class="chord-settings mb-4 px-1"></div>
             <ol id="results-list" class="space-y-3"></ol>
         </section>
     </main>

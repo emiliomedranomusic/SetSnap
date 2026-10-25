@@ -161,3 +161,21 @@ test('no pasa del límite de peticiones por llamada', async () => {
         m.restore();
     }
 });
+
+test('karaoke: busca "karaoke", no usa Odesli y se guarda aparte de la original', async () => {
+    const env = { YOUTUBE_API_KEY: 'k', ODESLI_API_KEY: 'o', SETSNAP_KV: memoryKV() };
+    env.SETSNAP_KV.map.set(cacheKey({ id: SP(1) }), JSON.stringify({ v: VID(1), t: Date.now() })); // la original ya está
+    const m = mockFetch([['https://www.googleapis.com/youtube/v3/search', (url) => {
+        assert.equal(new URL(url).searchParams.get('q'), 'Creep Radiohead karaoke');
+        return Response.json({ items: [{ id: { videoId: VID(5) } }] });
+    }]]);
+    try {
+        const res = await findVideos(env, [{ id: SP(1), title: 'Creep', artist: 'Radiohead', version: 'karaoke' }]);
+        assert.deepEqual(res.videos, [VID(5)]);
+        assert.ok(!m.calls.some((c) => c.url.includes('song.link')));
+        assert.equal(parseEntry(env.SETSNAP_KV.map.get(cacheKey({ id: SP(1), version: 'karaoke' }))).v, VID(5));
+        assert.equal(parseEntry(env.SETSNAP_KV.map.get(cacheKey({ id: SP(1) }))).v, VID(1), 'la original no se toca');
+    } finally {
+        m.restore();
+    }
+});

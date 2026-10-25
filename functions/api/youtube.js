@@ -5,7 +5,7 @@
  * Arma una lista de YouTube sin iniciar sesión. Los videos ya buscados por
  * cualquier usuario salen de caché y no gastan cuota.
  */
-import { findVideos, watchUrls } from '../../lib/server/youtube.js';
+import { findVideos, watchUrls, VERSIONS } from '../../lib/server/youtube.js';
 import { json, kvStore, clientIp, today, dailyLimits, intEnv, tr } from '../../lib/server/common.js';
 
 const MAX_SONGS = 100;
@@ -20,12 +20,14 @@ export async function onRequestPost({ request, env }) {
     } catch {
         return json(400, { success: false, message: tr(request, 'Petición inválida.', 'Invalid request.') });
     }
+    const version = VERSIONS.includes(body?.version) ? body.version : undefined;
     const songs = (Array.isArray(body?.songs) ? body.songs : [])
         .slice(0, MAX_SONGS)
         .map((s) => ({
             id: typeof s?.id === 'string' ? s.id : '',
             title: String(s?.title || '').slice(0, 200),
             artist: String(s?.artist || '').slice(0, 200),
+            version,
         }))
         .filter((s) => s.title);
     if (!songs.length) return json(400, { success: false, message: tr(request, 'No hay canciones.', 'No songs.') });

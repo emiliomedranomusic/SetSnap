@@ -118,3 +118,39 @@ test('searchItem sin resultados', async () => {
     assert.equal(res.status, 'not_found');
     assert.equal(res.bestScore, null);
 });
+
+test('modo karaoke: prefiere la versión karaoke aunque sea de otro "artista"', () => {
+    const item = { ...parseLine('Creep - Radiohead'), version: 'karaoke' };
+    const ranked = rankTracks(item, [
+        track('Creep', ['Radiohead']),
+        track('Creep (Originally Performed by Radiohead) [Karaoke Version]', ['Sing Karaoke']),
+        track('Creep', ['TLC']),
+    ]);
+    assert.match(ranked[0].track.name, /Karaoke/);
+    assert.ok(ranked[0].score >= 85, `score ${ranked[0].score}`);
+    const original = ranked.find((r) => r.track.name === 'Creep' && r.track.artists[0].name === 'Radiohead');
+    assert.ok(original.score < 85, 'la original nunca se acepta sola en modo karaoke (queda para revisar)');
+});
+
+test('modo karaoke con "Artista - Canción" invertido', () => {
+    const item = { ...parseLine('Luis Miguel - La Incondicional'), version: 'karaoke' };
+    const s = scoreTrack(item, track('La Incondicional (Karaoke Version)', ['Karaoke Latino'], { album: { name: 'Éxitos de Luis Miguel Karaoke' } }));
+    assert.equal(s.flipped, true);
+    assert.ok(s.score >= 85, `score ${s.score}`);
+});
+
+test('modo instrumental prefiere "instrumental" sobre "karaoke"', () => {
+    const item = { ...parseLine('Perfect - Ed Sheeran'), version: 'instrumental' };
+    const ranked = rankTracks(item, [
+        track('Perfect (Karaoke Version)', ['Sing King']),
+        track('Perfect (Instrumental)', ['Ed Sheeran Tribute']),
+        track('Perfect', ['Ed Sheeran']),
+    ]);
+    assert.equal(ranked[0].track.name, 'Perfect (Instrumental)');
+    assert.equal(ranked[2].track.name, 'Perfect');
+});
+
+test('consultas en modo karaoke', () => {
+    assert.deepEqual(buildQueries({ ...parseLine('Creep - Radiohead'), version: 'karaoke' }), ['Creep Radiohead karaoke', 'Creep karaoke', 'track:"Creep" karaoke']);
+    assert.deepEqual(buildQueries({ ...parseLine('La Bamba'), version: 'instrumental' }), ['La Bamba instrumental', 'track:"La Bamba" instrumental']);
+});

@@ -12,6 +12,8 @@ Convierte el setlist que te mandaron (texto de WhatsApp, lista impresa o foto es
 - **Playlist nueva o existente**, sin repetir canciones que ya estén.
 - **Para la banda:** link para compartir el setlist (no necesitan cuenta, el setlist va dentro del link), copiar como texto e imprimir / guardar como PDF en letra grande con el tono de cada canción.
 - **Lista en YouTube sin login.** Arma una lista de YouTube con los videos del setlist (sin cuenta). Cada canción se busca una sola vez y queda en caché para todos, para siempre; ~600 éxitos en inglés y español se precargan solos.
+- **Acordes de cada canción** en Cifra Club, Ultimate Guitar, La Cuerda, MuseScore, Songsterr o iReal Pro (eliges los sitios). Son links de búsqueda: sin APIs ni costo. También aparecen en el setlist compartido, para que cada músico los abra.
+- **Versión karaoke o instrumental:** busca esas versiones en Spotify (y videos karaoke en YouTube) en vez de la original. La banda sigue viendo el nombre original de cada canción.
 - **Pega un link de playlist de Spotify** y se cargan sus canciones como setlist (con tu cuenta; Spotify solo deja leer playlists propias o colaborativas).
 - **Exportar CSV** para pasar el setlist a Deezer, Apple Music, Tidal, Amazon Music o YouTube Music con TuneMyMusic o Soundiiz.
 - **Español e inglés, modo claro/oscuro** (sigue al sistema o se elige a mano), instalable como app, aviso sin conexión, atajo Ctrl+Enter y accesible con teclado.

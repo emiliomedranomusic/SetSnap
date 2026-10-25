@@ -6,6 +6,7 @@ import * as guest from './guest.js';
 import { extractSetlistText } from './ocr.js';
 import { buildShareUrl, decodeSetlist, setlistToText } from './share.js';
 import { t, getLang, setLang, applyStatic } from './i18n.js';
+import { CHORD_SITES, chordLinks, defaultSites, validSites } from './chords.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -28,6 +29,7 @@ const els = {
     description: $('playlist-description'),
     isPublic: $('playlist-public'),
     modeHelp: $('mode-help'),
+    versionHelp: $('version-help'),
     searchButton: $('search-button'),
     searchLabel: $('search-label'),
     loginBox: $('login-box'),
@@ -70,6 +72,7 @@ const state = {
     busy: false,
     playlists: null,
     shared: null, // setlist abierto desde un link #s=
+    searchVersion: null, // 'karaoke' | 'instrumental' | null: con qué versión se hizo la búsqueda
 };
 
 // ---------- utilidades ----------
@@ -109,7 +112,85 @@ function radioValue(name) {
 function defaultPlaylistName() {
     const d = new Date();
     const pad = (n) => String(n).padStart(2, '0');
-    return `Setlist - ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const base = `Setlist - ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (state.searchVersion === 'karaoke') return `${base} (${t('version.suffixKaraoke')})`;
+    if (state.searchVersion === 'instrumental') return `${base} (${t('version.suffixInstrumental')})`;
+    return base;
+}
+
+function selectedVersion() {
+    const v = radioValue('version');
+    return v === 'karaoke' || v === 'instrumental' ? v : null;
+}
+
+function updateVersion() {
+    const v = selectedVersion();
+    els.versionHelp.textContent = v ? t(`version.${v}Help`) : '';
+    els.versionHelp.classList.toggle('hidden', !v);
+    store.set('version', v || 'original');
+}
+
+// ---------- acordes ----------
+
+function chordSites() {
+    try {
+        const saved = JSON.parse(store.get('chordSites') || 'null');
+        if (Array.isArray(saved)) return validSites(saved);
+    } catch {
+        // valor viejo o dañado: se usan los de por defecto
+    }
+    return defaultSites(getLang());
+}
+
+/** Canción "original" de una fila (en modo karaoke el track elegido es el karaoke). */
+function originalSong(r) {
+    const m = r.choice?.uri ? r.matches.find((x) => x.track.uri === r.choice.uri) : null;
+    if (m && !state.searchVersion) return { title: cleanTrackName(m.track.name), artist: artistsOf(m.track) };
+    const flipped = r.artist && (m || r.matches[0])?.flipped;
+    return flipped ? { title: r.artist, artist: r.title } : { title: r.title, artist: r.artist };
+}
+
+function chordLinksHtml(title, artist, { compact = false } = {}) {
+    const links = chordLinks(title, artist, chordSites());
+    if (!links.length) return '';
+    return links
+        .map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener" title="${esc(t('chords.title', { site: l.name }))}" class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 no-underline hover:bg-slate-50">${compact ? esc(l.short) : `<span class="material-symbols-outlined text-sm" aria-hidden="true">music_note</span>${esc(l.name)}`}</a>`)
+        .join('');
+}
+
+/** Selector de sitios de acordes (en resultados y en el setlist compartido). */
+function renderChordSettings() {
+    const active = chordSites();
+    const summary = active.length ? CHORD_SITES.filter((s) => active.includes(s.id)).map((s) => s.name).join(', ') : t('chords.none');
+    const html = `
+        <details class="text-xs text-slate-600">
+            <summary class="cursor-pointer select-none font-semibold">🎸 ${esc(t('chords.label'))}: <span class="font-normal">${esc(summary)}</span></summary>
+            <fieldset class="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                <legend class="sr-only">${esc(t('chords.choose'))}</legend>
+                ${CHORD_SITES.map((s) => `
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" data-chord-site="${s.id}" class="rounded border-slate-300 text-primary focus:ring-primary/30"${active.includes(s.id) ? ' checked' : ''}>
+                        ${esc(s.name)}
+                    </label>`).join('')}
+            </fieldset>
+        </details>`;
+    document.querySelectorAll('.chord-settings').forEach((el) => {
+        const wasOpen = el.querySelector('details')?.open;
+        el.innerHTML = html;
+        if (wasOpen) el.querySelector('details').open = true;
+    });
+}
+
+function onChordSiteChange(e) {
+    const box = e.target.closest('[data-chord-site]');
+    if (!box) return;
+    const ids = [...box.closest('.chord-settings').querySelectorAll('[data-chord-site]')]
+        .filter((b) => b.checked)
+        .map((b) => b.dataset.chordSite);
+    store.set('chordSites', JSON.stringify(validSites(ids)));
+    renderChordSettings();
+    if (state.results.length) renderResults();
+    renderShareView();
 }
 
 function artistsOf(track) {
@@ -348,7 +429,8 @@ async function adminCompareSeed() {
 async function doSearch() {
     if (state.busy) return;
     if (await maybeLoadPlaylist()) return;
-    const items = parseSetlist(els.textarea.value);
+    const version = selectedVersion();
+    const items = parseSetlist(els.textarea.value).map((i) => (version ? { ...i, version } : i));
     if (!items.length) {
         setStatus(esc(t('status.needText')), 'error');
         return;
@@ -366,6 +448,7 @@ async function doSearch() {
     state.busy = true;
     els.searchButton.disabled = true;
     state.created = null;
+    state.searchVersion = version;
     els.donePanel.classList.add('hidden');
     setStatus(esc(t('status.searchingN', { n: items.length })));
     setProgress(0, items.length);
@@ -440,6 +523,7 @@ function pendingUris() {
 async function researchRow(idx, text) {
     const row = state.results[idx];
     const parsed = parseLine(text) || { title: text.trim(), artist: '', ordered: false };
+    if (state.searchVersion) parsed.version = state.searchVersion;
     if (!parsed.title) return;
     row.searching = true;
     renderResults();
@@ -559,7 +643,10 @@ function renderRow(r, idx) {
                 <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${badgeClass}">${label}</span>
             </div>
             ${body}
-            <div class="flex flex-wrap justify-end gap-2 mt-3">${actions.join('')}</div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
+                <div class="flex flex-wrap gap-1.5">${r.choice?.skip || r.searching ? '' : chordLinksHtml(originalSong(r).title, originalSong(r).artist)}</div>
+                <div class="flex flex-wrap justify-end gap-2 ml-auto">${actions.join('')}</div>
+            </div>
         </li>`;
 }
 
@@ -729,9 +816,8 @@ function currentSetlist() {
         .filter((r) => !r.choice?.skip)
         .map((r) => {
             const m = r.choice?.uri ? r.matches.find((x) => x.track.uri === r.choice.uri) : null;
-            return m
-                ? { title: cleanTrackName(m.track.name), artist: artistsOf(m.track), id: m.track.id, note: r.note }
-                : { title: r.title, artist: r.artist, id: '', note: r.note };
+            // En modo karaoke la banda ve la canción original; el link lleva al karaoke elegido.
+            return { ...originalSong(r), id: m?.track.id || '', note: r.note };
         });
     return {
         name: state.created?.name || els.name.value.trim() || defaultPlaylistName(),
@@ -740,14 +826,16 @@ function currentSetlist() {
     };
 }
 
-async function openYouTube(setlist) {
+async function openYouTube(setlist, version = null) {
     if (!setlist.songs.length) {
         setStatus(esc(t('yt.none')), 'error');
         return;
     }
     setStatus(`<span class="animate-pulse">${esc(t('yt.searching'))}</span>`);
     try {
-        const { urls, found, total, limited } = await guest.youtubeLists(setlist.songs);
+        // En karaoke se busca por el nombre original ("Creep Radiohead karaoke"), no por el del track karaoke.
+        const songs = version ? setlist.songs.map((x) => ({ title: x.title, artist: x.artist })) : setlist.songs;
+        const { urls, found, total, limited } = await guest.youtubeLists(songs, version || undefined);
         if (!urls.length) {
             setStatus(esc(limited ? t('yt.outOfQuota') : t('yt.noVideos')), 'error');
             return;
@@ -882,19 +970,22 @@ function renderShareView() {
                 ${state.config.youtubeEnabled ? `<button type="button" data-share="youtube" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">smart_display</span>${esc(t('share.youtube'))}</button>` : ''}
                 <button type="button" data-share="use" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">edit</span>${esc(t('share.use'))}</button>
             </div>
-            <ol class="mt-6 divide-y divide-slate-100">
+            <div class="chord-settings mt-4"></div>
+            <ol class="mt-4 divide-y divide-slate-100">
                 ${setlist.songs.map((x, i) => `
                     <li class="flex items-center gap-3 py-3">
                         <span class="font-mono text-xs text-slate-400 w-6 text-right">${i + 1}</span>
                         <div class="min-w-0 flex-1">
                             <div class="font-semibold text-slate-800 truncate">${esc(x.title)}</div>
                             ${x.artist ? `<div class="text-xs text-slate-500 truncate">${esc(x.artist)}</div>` : ''}
+                            <div class="flex flex-wrap gap-1 mt-1.5">${chordLinksHtml(x.title, x.artist, { compact: true })}</div>
                         </div>
                         ${x.note ? `<span class="text-xs font-bold border border-slate-300 rounded-md px-2 py-0.5">${esc(x.note)}</span>` : ''}
                         ${x.id ? `<a href="https://open.spotify.com/track/${esc(x.id)}" target="_blank" rel="noopener" title="${esc(t('share.listen'))}" aria-label="${esc(t('share.listen'))}" class="text-slate-400 hover:text-spotify-green"><span class="material-symbols-outlined text-xl" aria-hidden="true">play_arrow</span></a>` : ''}
                     </li>`).join('')}
             </ol>
         </div>`;
+    renderChordSettings();
 }
 
 // ---------- OCR ----------
@@ -999,7 +1090,9 @@ function renderLanguage() {
     applyTheme();
     renderAccount();
     updateMode();
+    updateVersion();
     updateLineCount();
+    renderChordSettings();
     if (state.results.length) renderResults();
     if (state.created) renderDone({ scroll: false });
     renderShareView();
@@ -1093,6 +1186,8 @@ function bindEvents() {
     els.onlyPending.addEventListener('change', renderResults);
     els.isPublic.addEventListener('change', () => store.set('public', els.isPublic.checked ? '1' : '0'));
     document.querySelectorAll('input[name="mode"]').forEach((el) => el.addEventListener('change', updateMode));
+    document.querySelectorAll('input[name="version"]').forEach((el) => el.addEventListener('change', updateVersion));
+    document.addEventListener('change', onChordSiteChange);
     document.querySelectorAll('input[name="destination"]').forEach((el) => el.addEventListener('change', updateDestination));
     els.existingSelect.addEventListener('change', renderCommitBar);
 
@@ -1166,7 +1261,7 @@ function bindEvents() {
         if (action === 'copy-text') copyText(setlistToText(currentSetlist(), t('share.playlistLine')), t('status.setlistCopied'));
         if (action === 'csv') exportCsv();
         if (action === 'print') printSetlist(currentSetlist());
-        if (action === 'youtube') openYouTube(currentSetlist());
+        if (action === 'youtube') openYouTube(currentSetlist(), state.searchVersion);
         if (action === 'reset') reset();
     });
 }
@@ -1177,6 +1272,11 @@ function restoreForm() {
     const mode = store.get('mode');
     if (mode) {
         const input = document.querySelector(`input[name="mode"][value="${mode}"]`);
+        if (input) input.checked = true;
+    }
+    const version = store.get('version');
+    if (version) {
+        const input = document.querySelector(`input[name="version"][value="${version}"]`);
         if (input) input.checked = true;
     }
     els.isPublic.checked = store.get('public') === '1';
@@ -1215,6 +1315,8 @@ async function init() {
     bindEvents();
     restoreForm();
     updateMode();
+    updateVersion();
+    renderChordSettings();
     updateLineCount();
 
     await loadConfig();

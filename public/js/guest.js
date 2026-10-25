@@ -43,11 +43,11 @@ export async function addItems(playlistId, editToken, uris) {
 }
 
 /** Lista de YouTube sin login: devuelve { urls, found, total, limited }. */
-export async function youtubeLists(songs) {
+export async function youtubeLists(songs, version) {
     const data = await call('/api/youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ songs: songs.map((s) => ({ id: s.id || '', title: s.title, artist: s.artist || '' })) }),
+        body: JSON.stringify({ version, songs: songs.map((s) => ({ id: s.id || '', title: s.title, artist: s.artist || '' })) }),
     });
     return {
         urls: data.urls || [],
