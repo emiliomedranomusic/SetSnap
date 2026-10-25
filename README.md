@@ -13,6 +13,7 @@ Convierte el setlist que te mandaron (texto de WhatsApp, lista impresa o foto es
 - **Para la banda:** link para compartir el setlist (no necesitan cuenta, el setlist va dentro del link), copiar como texto e imprimir / guardar como PDF en letra grande con el tono de cada canción.
 - **Lista en YouTube sin login.** Arma una lista de YouTube con los videos del setlist (sin cuenta). Cada canción se busca una sola vez y queda en caché para todos, para siempre; ~600 éxitos en inglés y español se precargan solos.
 - **Acordes de cada canción** en Cifra Club, Ultimate Guitar, La Cuerda, MuseScore, Songsterr o iReal Pro (eliges los sitios). Son links de búsqueda: sin APIs ni costo. También aparecen en el setlist compartido, para que cada músico los abra.
+- **BPM y tonalidad de cada canción** (de la grabación original), con ReccoBeats y GetSongBPM de respaldo. Salen en la revisión, el setlist compartido, la hoja impresa, el texto copiado y el CSV. Cada canción se consulta una sola vez y queda en caché para todos.
 - **Versión karaoke o instrumental:** busca esas versiones en Spotify (y videos karaoke en YouTube) en vez de la original. La banda sigue viendo el nombre original de cada canción.
 - **Pega un link de playlist de Spotify** y se cargan sus canciones como setlist (con tu cuenta; Spotify solo deja leer playlists propias o colaborativas).
 - **Exportar CSV** para pasar el setlist a Deezer, Apple Music, Tidal, Amazon Music o YouTube Music con TuneMyMusic o Soundiiz.
@@ -85,6 +86,8 @@ Si cambias clases de Tailwind en el HTML o JS, `npm run dev` recompila el CSS al
 | `YOUTUBE_LISTS_PER_IP` | No | Listas de YouTube al día por IP (por defecto 20). |
 | `YOUTUBE_SEED_RESERVE` | No | Búsquedas de YouTube que la precarga nocturna deja libres para los usuarios (por defecto 20). |
 | `SEED_MARKET` | No | País de Spotify para resolver la lista de precarga (por defecto `MX`). |
+| `GETSONGBPM_API_KEY` | No | Llave de [GetSongBPM](https://getsongbpm.com/api): respaldo de BPM/tonalidad para lo que ReccoBeats no tenga. |
+| `GETSONGBPM_DAILY` | No | Consultas a GetSongBPM al día (por defecto 2000; su límite es 3000 por hora). |
 | `SUPPORT_URL` | No | Link de Ko-fi / Buy Me a Coffee. Si está, aparece el botón "☕ Apóyanos". |
 | `ODESLI_API_KEY` | No | Llave de Odesli (song.link). Si está, se usa antes que la búsqueda de YouTube y no gasta cuota. |
 

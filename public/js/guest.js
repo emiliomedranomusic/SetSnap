@@ -42,6 +42,16 @@ export async function addItems(playlistId, editToken, uris) {
     });
 }
 
+/** BPM y tonalidad: [{ bpm, key }|null] en el mismo orden. */
+export async function fetchFeatures(songs) {
+    const data = await call('/api/features', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songs }),
+    });
+    return data.features || [];
+}
+
 /** Lista de YouTube sin login: devuelve { urls, found, total, limited }. */
 export async function youtubeLists(songs, version) {
     const data = await call('/api/youtube', {

@@ -218,6 +218,11 @@
     color: #555;
     font-size: 13pt;
   }
+  #print-sheet .feat {
+    color: #555;
+    font-size: 12pt;
+    white-space: nowrap;
+  }
   #print-sheet .note {
     margin-left: auto;
     font-weight: 700;

@@ -33,3 +33,10 @@ SPOTIFY_CLIENT_ID=tu_client_id
 # YOUTUBE_DAILY_SEARCHES=90
 # YOUTUBE_LISTS_PER_IP=20
 # ODESLI_API_KEY=
+
+# BPM y tonalidad: ReccoBeats no necesita llave; GetSongBPM es el respaldo
+# GETSONGBPM_API_KEY=
+# GETSONGBPM_DAILY=2000
+
+# Botón "Apóyanos" (Ko-fi / Buy Me a Coffee)
+# SUPPORT_URL=https://ko-fi.com/tu-usuario

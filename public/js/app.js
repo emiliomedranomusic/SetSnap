@@ -73,6 +73,7 @@ const state = {
     playlists: null,
     shared: null, // setlist abierto desde un link #s=
     searchVersion: null, // 'karaoke' | 'instrumental' | null: con qué versión se hizo la búsqueda
+    features: new Map(), // clave de canción → { bpm, key } | null (BPM y tonalidad)
 };
 
 // ---------- utilidades ----------
@@ -128,6 +129,64 @@ function updateVersion() {
     els.versionHelp.textContent = v ? t(`version.${v}Help`) : '';
     els.versionHelp.classList.toggle('hidden', !v);
     store.set('version', v || 'original');
+}
+
+// ---------- BPM y tonalidad ----------
+
+function featureSong(r) {
+    const m = r.choice?.uri ? r.matches.find((x) => x.track.uri === r.choice.uri) : null;
+    return { id: m?.track.id || '', ...originalSong(r) };
+}
+
+function featureKeyOf(song) {
+    return song.id || `q:${song.title}|${song.artist}`.toLowerCase();
+}
+
+function featureFor(r) {
+    return state.features.get(featureKeyOf(featureSong(r))) || null;
+}
+
+function featText(f) {
+    return f ? [f.key, f.bpm ? `${f.bpm} BPM` : ''].filter(Boolean).join(' · ') : '';
+}
+
+let featuresLoading = false;
+let featuresAgain = false;
+
+/** Pide BPM y tonalidad de las canciones que aún no tenemos (en segundo plano). */
+async function loadFeatures() {
+    if (featuresLoading) {
+        featuresAgain = true;
+        return;
+    }
+    const songs = [];
+    const seen = new Set();
+    for (const r of state.results) {
+        if (r.choice?.skip || r.searching) continue;
+        const song = featureSong(r);
+        const key = featureKeyOf(song);
+        if (!song.title || state.features.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        songs.push(song);
+    }
+    if (!songs.length) return;
+    featuresLoading = true;
+    try {
+        for (let i = 0; i < songs.length; i += 100) {
+            const chunk = songs.slice(i, i + 100);
+            const result = await guest.fetchFeatures(chunk);
+            chunk.forEach((song, j) => state.features.set(featureKeyOf(song), result[j] || null));
+        }
+        if (state.results.length) renderResults();
+    } catch (err) {
+        console.warn('BPM/tonalidad no disponibles', err);
+    } finally {
+        featuresLoading = false;
+        if (featuresAgain) {
+            featuresAgain = false;
+            loadFeatures();
+        }
+    }
 }
 
 // ---------- acordes ----------
@@ -486,6 +545,7 @@ async function doSearch() {
         els.searchButton.disabled = false;
         setProgress(null);
         renderCommitBar();
+        loadFeatures();
     }
 }
 
@@ -545,6 +605,7 @@ async function researchRow(idx, text) {
     } finally {
         row.searching = false;
         renderResults();
+        loadFeatures();
     }
 }
 
@@ -637,7 +698,7 @@ function renderRow(r, idx) {
                         <span class="text-sm font-medium text-slate-800 break-words">${esc(r.rawLine)}</span>
                     </div>
                     <div class="text-[11px] text-slate-400 ml-5 mt-0.5">
-                        ${esc(t('row.searchedAs'))} ${esc(interpreted)}${r.note ? ` · <span class="font-semibold text-slate-600">${esc(r.note)}</span>` : ''}
+                        ${esc(t('row.searchedAs'))} ${esc(interpreted)}${r.note ? ` · <span class="font-semibold text-slate-600">${esc(r.note)}</span>` : ''}${featText(featureFor(r)) ? ` · <span class="whitespace-nowrap text-slate-600" title="${esc(t('features.title'))}">🎼 ${esc(featText(featureFor(r)))}</span>` : ''}
                     </div>
                 </div>
                 <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${badgeClass}">${label}</span>
@@ -817,7 +878,8 @@ function currentSetlist() {
         .map((r) => {
             const m = r.choice?.uri ? r.matches.find((x) => x.track.uri === r.choice.uri) : null;
             // En modo karaoke la banda ve la canción original; el link lleva al karaoke elegido.
-            return { ...originalSong(r), id: m?.track.id || '', note: r.note };
+            const f = featureFor(r);
+            return { ...originalSong(r), id: m?.track.id || '', note: r.note, bpm: f?.bpm || null, key: f?.key || '' };
         });
     return {
         name: state.created?.name || els.name.value.trim() || defaultPlaylistName(),
@@ -883,13 +945,14 @@ function csvCell(value) {
 
 /** CSV para importar en TuneMyMusic/Soundiiz (encabezados en inglés, que es lo que reconocen). */
 function exportCsv() {
-    const rows = [['Track name', 'Artist name', 'Album', 'Note', 'Spotify URL']];
+    const rows = [['Track name', 'Artist name', 'Album', 'Note', 'Key', 'BPM', 'Spotify URL']];
     for (const r of state.results) {
         if (r.choice?.skip) continue;
         const m = r.choice?.uri ? r.matches.find((x) => x.track.uri === r.choice.uri) : null;
+        const f = featureFor(r);
         rows.push(m
-            ? [cleanTrackName(m.track.name), artistsOf(m.track), m.track.album?.name || '', r.note, trackUrl(m.track)]
-            : [r.title, r.artist, '', r.note, '']);
+            ? [cleanTrackName(m.track.name), artistsOf(m.track), m.track.album?.name || '', r.note, f?.key || '', f?.bpm || '', trackUrl(m.track)]
+            : [r.title, r.artist, '', r.note, f?.key || '', f?.bpm || '', '']);
     }
     const csv = '\ufeff' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n');
     const name = (state.created?.name || els.name.value.trim() || defaultPlaylistName()).replace(/[\\/:*?"<>|]+/g, '-');
@@ -907,7 +970,7 @@ function printSetlist(setlist) {
     els.printSheet.innerHTML = `
         <h1>${esc(setlist.name)}</h1>
         <ol>${setlist.songs
-            .map((x, i) => `<li><span class="num">${i + 1}</span><span><b>${esc(x.title)}</b>${x.artist ? ` <span class="artist">${esc(x.artist)}</span>` : ''}</span>${x.note ? `<span class="note">${esc(x.note)}</span>` : ''}</li>`)
+            .map((x, i) => `<li><span class="num">${i + 1}</span><span><b>${esc(x.title)}</b>${x.artist ? ` <span class="artist">${esc(x.artist)}</span>` : ''}</span>${featText(x) ? `<span class="feat"${x.note ? '' : ' style="margin-left:auto"'}>${esc(featText(x))}</span>` : ''}${x.note ? `<span class="note">${esc(x.note)}</span>` : ''}</li>`)
             .join('')}</ol>`;
     window.print();
 }
@@ -980,6 +1043,7 @@ function renderShareView() {
                             ${x.artist ? `<div class="text-xs text-slate-500 truncate">${esc(x.artist)}</div>` : ''}
                             <div class="flex flex-wrap gap-1 mt-1.5">${chordLinksHtml(x.title, x.artist, { compact: true })}</div>
                         </div>
+                        ${featText(x) ? `<span class="text-[11px] text-slate-500 whitespace-nowrap" title="${esc(t('features.title'))}">${esc(featText(x))}</span>` : ''}
                         ${x.note ? `<span class="text-xs font-bold border border-slate-300 rounded-md px-2 py-0.5">${esc(x.note)}</span>` : ''}
                         ${x.id ? `<a href="https://open.spotify.com/track/${esc(x.id)}" target="_blank" rel="noopener" title="${esc(t('share.listen'))}" aria-label="${esc(t('share.listen'))}" class="text-slate-400 hover:text-spotify-green"><span class="material-symbols-outlined text-xl" aria-hidden="true">play_arrow</span></a>` : ''}
                     </li>`).join('')}
@@ -1224,6 +1288,7 @@ function bindEvents() {
             case 'choose':
                 row.choice = { uri: btn.dataset.uri };
                 row.expanded = false;
+                setTimeout(loadFeatures, 0);
                 break;
             case 'toggle':
                 row.expanded = !row.expanded;

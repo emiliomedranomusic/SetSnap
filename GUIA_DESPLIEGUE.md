@@ -78,6 +78,14 @@ La cuota gratis da ~100 búsquedas nuevas al día; cada canción se busca una so
 
 La precarga necesita que la cuenta central esté conectada (Paso 5), porque primero ubica cada canción en Spotify.
 
+## Paso 6b (opcional): BPM y tonalidad
+
+ReccoBeats funciona solo, sin llave. Para el respaldo con GetSongBPM:
+
+1. Con SetSnap ya publicado, entra a [getsongbpm.com/api](https://getsongbpm.com/api).
+2. En el formulario pon la URL de SetSnap (p. ej. `https://setsnap.pages.dev`), como "backlink" la misma URL (el pie de página ya tiene el link a getsongbpm.com que exigen) y tu email.
+3. Activa la llave desde el correo que te mandan y ponla en Cloudflare como `GETSONGBPM_API_KEY` (Secret).
+
 ## Paso 7: Instalar en el celular
 
 Abre la URL en el celular y usa **"Agregar a pantalla de inicio"** (en Android también aparece el botón "Instalar"). Una vez instalada en Android, SetSnap aparece en el menú **Compartir** de WhatsApp y la galería: compartes el mensaje o la foto del setlist y se carga sola.

@@ -23,13 +23,17 @@ async function pipe(bytes, stream) {
 }
 
 /**
- * setlist: { name, playlistUrl?, songs: [{ title, artist, id?, note? }] }
+ * setlist: { name, playlistUrl?, songs: [{ title, artist, id?, note?, bpm?, key? }] }
  */
 export async function encodeSetlist(setlist) {
     const compact = {
         n: setlist.name || '',
         p: setlist.playlistUrl || '',
-        s: setlist.songs.map((x) => [x.title || '', x.artist || '', x.id || '', x.note || '']),
+        s: setlist.songs.map((x) => {
+            const row = [x.title || '', x.artist || '', x.id || '', x.note || ''];
+            if (x.bpm || x.key) row.push(x.bpm || 0, x.key || '');
+            return row;
+        }),
     };
     const bytes = new TextEncoder().encode(JSON.stringify(compact));
     if (typeof CompressionStream === 'function') {
@@ -45,7 +49,7 @@ export async function decodeSetlist(code) {
     return {
         name: c.n || '',
         playlistUrl: c.p || '',
-        songs: (c.s || []).map(([title, artist, id, note]) => ({ title, artist, id, note })),
+        songs: (c.s || []).map(([title, artist, id, note, bpm, key]) => ({ title, artist, id, note, bpm: bpm || null, key: key || '' })),
     };
 }
 
@@ -58,6 +62,8 @@ export function setlistToText(setlist, playlistLabel = 'Playlist') {
         let line = `${i + 1}. ${x.title}`;
         if (x.artist) line += ` - ${x.artist}`;
         if (x.note) line += ` (${x.note})`;
+        const feat = [x.key, x.bpm ? `${x.bpm} BPM` : ''].filter(Boolean).join(' · ');
+        if (feat) line += ` [${feat}]`;
         return line;
     });
     const header = setlist.name ? `${setlist.name}\n\n` : '';
