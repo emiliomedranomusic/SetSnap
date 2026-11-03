@@ -1,3 +1,5 @@
+> **Documento histórico.** Describe la versión con servidor Express. La app actual es estática con login PKCE y una función serverless para el OCR (ver README).
+
 # Auditoría del repo y plan por fases
 
 ## 1. Auditoría

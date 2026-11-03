@@ -1,861 +1,292 @@
 <!DOCTYPE html>
-<html class="light" lang="es">
+<html lang="es">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SetSnap</title>
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='.9em' font-size='28'>🎵</text></svg>">
+    <meta name="description" content="Pega o fotografía un setlist y conviértelo en una playlist de Spotify en segundos.">
+    <meta name="color-scheme" content="light dark">
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0f172a">
-    <link rel="apple-touch-icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='.9em' font-size='28'>🎵</text></svg>">
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet" />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet" />
-
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#2b8cee",
-                        "background-light": "#f6f7f8",
-                        "background-dark": "#101922",
-                        "spotify-green": "#1DB954",
-                    },
-                    fontFamily: {
-                        "display": ["Inter", "sans-serif"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "1rem",
-                        "lg": "2rem",
-                        "xl": "3rem",
-                        "full": "9999px"
-                    },
-                },
-            },
-        }
+    <meta name="theme-color" content="#f6f7f8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0a0f1c" media="(prefers-color-scheme: dark)">
+    <script>
+        // Tema antes de pintar (evita el parpadeo): sistema, claro u oscuro.
+        (function () {
+            var pref = 'system';
+            try { pref = localStorage.getItem('setsnap.theme') || 'system'; } catch (e) { }
+            var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.classList.toggle('dark', dark);
+            try {
+                var l = localStorage.getItem('setsnap.lang');
+                document.documentElement.lang = l || (/^en\b/i.test(navigator.language || '') ? 'en' : 'es');
+            } catch (e) { }
+        })();
     </script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            min-height: max(884px, 100dvh);
-        }
-
-        .custom-shadow {
-            box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.04), 0 2px 8px -1px rgba(0, 0, 0, 0.02);
-        }
-
-        .result-link {
-            word-break: break-all;
-        }
-
-        .collapse-content {
-            overflow: hidden;
-        }
-    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400..600,0..1,0&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="/css/tailwind.css">
 </head>
 
-<body class="bg-background-light min-h-screen text-slate-900 flex flex-col font-display">
+<body class="bg-background-light min-h-screen text-slate-900 flex flex-col font-display antialiased">
+    <a href="#song-list" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 bg-surface text-slate-900 px-3 py-2 rounded-lg">Setlist</a>
 
-    <!-- Header -->
-    <header class="w-full max-w-2xl mx-auto px-6 py-8 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <div class="bg-primary text-white p-2 rounded-full flex items-center justify-center">
-                <span class="material-symbols-outlined text-2xl">music_note</span>
-            </div>
-            <h1 class="text-xl font-bold tracking-tight">SetSnap</h1>
+    <div id="offline-banner" class="hidden bg-amber-100 text-amber-800 text-xs text-center px-4 py-2" role="status" data-i18n="offline"></div>
+    <div id="update-banner" class="hidden bg-primary text-white text-xs px-4 py-2 items-center justify-center gap-3" role="status">
+        <span data-i18n="update.ready"></span>
+        <button type="button" id="update-button" class="underline font-semibold" data-i18n="update.reload"></button>
+    </div>
+
+    <header class="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-6 pb-4 flex items-center justify-between gap-3">
+        <a href="/" class="flex items-center gap-3 no-underline text-slate-900">
+            <span class="bg-primary text-white w-10 h-10 rounded-full flex items-center justify-center">
+                <span class="material-symbols-outlined text-2xl" aria-hidden="true">music_note</span>
+            </span>
+            <span class="text-xl font-bold tracking-tight">SetSnap</span>
+        </a>
+        <div class="flex items-center gap-1.5 text-sm">
+            <div id="account" class="flex items-center gap-2"></div>
+            <button type="button" id="install-button" class="hidden icon-button" data-i18n-title="header.install" data-i18n-aria="header.install">
+                <span class="material-symbols-outlined text-xl" aria-hidden="true">install_mobile</span>
+            </button>
+            <button type="button" id="lang-button" class="icon-button font-semibold text-xs" data-i18n-title="header.lang" data-i18n-aria="header.lang">EN</button>
+            <button type="button" id="theme-button" class="icon-button" data-i18n-aria="header.theme">
+                <span class="material-symbols-outlined text-xl" aria-hidden="true" id="theme-icon">contrast</span>
+            </button>
         </div>
     </header>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pb-20">
-        <!-- Main Utility Card -->
-        <section class="bg-white rounded-xl custom-shadow border border-slate-200 p-6 md:p-8">
+    <main class="flex-1 w-full max-w-2xl mx-auto px-4 pb-32">
 
+        <!-- Vista de setlist compartido (#s=...) -->
+        <section id="share-view" class="hidden"></section>
 
-            <!-- Input setlist -->
-            <div class="mb-6">
-                <div class="flex items-center justify-between mb-3">
-                    <label for="song-list" class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Setlist
-                        Content</label>
-                    <div id="gemini-upload-container" class="hidden items-center gap-2">
-                        <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp"
-                            class="hidden text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition cursor-pointer">
-                        <button type="button"
-                            class="flex items-center gap-2 text-xs font-medium text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-all cursor-pointer border border-primary/20"
-                            onclick="document.getElementById('image-input').click()">
-                            <span class="material-symbols-outlined text-sm">photo_camera</span> Subir Imagen
-                        </button>
-                        <button type="button" id="extract-image-button"
-                            class="text-xs font-semibold py-1.5 px-3 rounded-full disabled:opacity-50 transition bg-slate-100 text-slate-700 hover:bg-slate-200"
-                            disabled>Extraer Texto</button>
-                        <span id="extract-image-spinner" class="hidden text-xl animate-pulse">✨</span>
-                    </div>
-                </div>
-                <textarea id="song-list"
-                    class="w-full min-h-[160px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none text-sm"
-                    placeholder="Pega las canciones aquí (ej. Artista - Canción)..."></textarea>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <!-- Select Mode -->
-                <div class="flex flex-col gap-2">
-                    <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Modo de
-                        Funcionamiento</label>
-                    <div class="relative">
-                        <select id="mode-select"
-                            class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer pr-10">
-                            <option value="auto">Automático (Recomendado)</option>
-                            <option value="manual">Revisión Manual</option>
-                        </select>
-                    </div>
+        <!-- Editor -->
+        <section id="editor" class="bg-surface rounded-xl custom-shadow border border-slate-200 p-5 sm:p-8">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <label for="song-list" class="text-sm font-semibold text-slate-500 uppercase tracking-wider" data-i18n="editor.label">Setlist</label>
+                <div id="ocr-controls" class="hidden items-center gap-2">
+                    <input type="file" id="image-input" accept="image/*" class="hidden">
+                    <button type="button" id="photo-button"
+                        class="flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 border border-primary/20 transition">
+                        <span class="material-symbols-outlined text-base" aria-hidden="true">photo_camera</span>
+                        <span data-i18n="editor.photo"></span>
+                    </button>
                 </div>
             </div>
+            <button type="button" id="gen-open" class="mb-3 w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/10 transition">
+                <span class="material-symbols-outlined text-lg" aria-hidden="true">auto_awesome</span>
+                <span data-i18n="gen.open"></span>
+            </button>
 
-            <!-- Configuration Inputs -->
-            <div class="pt-4 mb-8 space-y-4">
-                <div class="hidden">
-                    <label for="playlist-name"
-                        class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nombre de la
-                        Playlist</label>
-                    <input type="text" id="playlist-name"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                        placeholder="Opcional. Por defecto: Setlist - Fecha">
+            <!-- Generador de setlists por evento -->
+            <section id="generator" class="hidden mb-4 rounded-2xl border border-primary/30 bg-primary/5 p-4" aria-labelledby="gen-title">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 id="gen-title" class="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-lg text-primary" aria-hidden="true">auto_awesome</span>
+                        <span data-i18n="gen.title"></span>
+                    </h2>
+                    <button type="button" id="gen-close" class="icon-button" data-i18n-aria="gen.close" data-i18n-title="gen.close">
+                        <span class="material-symbols-outlined text-xl" aria-hidden="true">close</span>
+                    </button>
                 </div>
-
-                <div class="hidden">
-                    <label for="playlist-description"
-                        class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Descripción</label>
-                    <input type="text" id="playlist-description"
-                        class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                        placeholder="Opcional. Creada desde setlist">
-                </div>
-
-                <label class="hidden items-center gap-3 cursor-pointer pt-2 w-fit">
-                    <div class="relative inline-flex items-center">
-                        <input type="checkbox" id="playlist-public" class="sr-only peer">
-                        <div
-                            class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
-                        </div>
+                <fieldset class="mt-3">
+                    <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="gen.event"></legend>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-slate-100 p-1 rounded-2xl" role="radiogroup">
+                        <label class="segment"><input type="radio" name="gen-event" value="wedding" class="sr-only" checked><span data-i18n="gen.event.wedding"></span></label>
+                        <label class="segment"><input type="radio" name="gen-event" value="party" class="sr-only"><span data-i18n="gen.event.party"></span></label>
+                        <label class="segment"><input type="radio" name="gen-event" value="restaurant" class="sr-only"><span data-i18n="gen.event.restaurant"></span></label>
+                        <label class="segment"><input type="radio" name="gen-event" value="corporate" class="sr-only"><span data-i18n="gen.event.corporate"></span></label>
                     </div>
-                    <span class="text-sm font-medium text-slate-700">Playlist Pública</span>
-                </label>
+                </fieldset>
+                <fieldset class="mt-3">
+                    <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="gen.lang"></legend>
+                    <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-full" role="radiogroup">
+                        <label class="segment"><input type="radio" name="gen-lang" value="es" class="sr-only"><span data-i18n="gen.lang.es"></span></label>
+                        <label class="segment"><input type="radio" name="gen-lang" value="en" class="sr-only"><span data-i18n="gen.lang.en"></span></label>
+                        <label class="segment"><input type="radio" name="gen-lang" value="both" class="sr-only" checked><span data-i18n="gen.lang.both"></span></label>
+                    </div>
+                </fieldset>
+                <fieldset class="mt-3">
+                    <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="gen.genres"></legend>
+                    <div id="gen-genres" class="flex flex-wrap gap-1.5"></div>
+                </fieldset>
+                <div class="mt-3 flex flex-wrap items-end gap-3">
+                    <label class="flex flex-col gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        <span data-i18n="gen.size"></span>
+                        <select id="gen-size" class="bg-surface border border-slate-200 rounded-full px-4 py-2 text-sm font-normal normal-case tracking-normal text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"></select>
+                    </label>
+                    <button type="button" id="gen-run" class="h-10 px-5 bg-primary text-white text-sm font-semibold rounded-full flex items-center gap-1.5 hover:opacity-90 transition">
+                        <span class="material-symbols-outlined text-lg" aria-hidden="true">auto_awesome</span>
+                        <span data-i18n="gen.generate"></span>
+                    </button>
+                    <button type="button" id="gen-again" class="hidden h-10 px-4 row-button" data-i18n="gen.again"></button>
+                </div>
+                <p class="mt-3 text-[11px] text-slate-500 leading-relaxed" data-i18n="gen.note"></p>
+            </section>
 
+            <div id="drop-zone" class="relative">
+                <textarea id="song-list" spellcheck="false" data-i18n-placeholder="editor.placeholder"
+                    class="w-full min-h-[180px] bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition resize-y text-sm leading-relaxed"></textarea>
+                <div id="drop-overlay"
+                    class="hidden absolute inset-0 rounded-2xl border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center text-primary font-semibold text-sm" data-i18n="editor.drop">
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-2 min-h-[1.25rem]">
+                <div class="flex items-center gap-3">
+                    <p id="line-count" class="text-xs text-slate-500" aria-live="polite"></p>
+                    <button type="button" id="example-button" class="text-xs font-semibold text-primary hover:underline" data-i18n="editor.example"></button>
+                    <button type="button" id="clear-button" class="hidden text-xs font-semibold text-slate-500 hover:underline" data-i18n="editor.clear"></button>
+                    <button type="button" id="admin-seed-button" class="hidden text-xs font-semibold text-amber-800 hover:underline" data-i18n="admin.button"></button>
+                </div>
+                <p class="text-xs text-slate-400 text-right">
+                    <span id="ocr-hint" class="hidden" data-i18n="editor.pasteHint"></span>
+                    <span class="hidden md:inline" data-i18n="editor.shortcut"></span>
+                </p>
+            </div>
+
+            <!-- Destino -->
+            <fieldset class="mt-6">
+                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2" data-i18n="dest.legend"></legend>
+                <div class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-full" role="radiogroup">
+                    <label class="segment"><input type="radio" name="destination" value="new" class="sr-only" checked><span data-i18n="dest.new"></span></label>
+                    <label class="segment"><input type="radio" name="destination" value="existing" class="sr-only"><span data-i18n="dest.existing"></span></label>
+                </div>
+            </fieldset>
+
+            <div id="new-playlist-fields" class="mt-4 space-y-4">
                 <div class="flex flex-col md:flex-row gap-4">
                     <div class="flex-1 flex flex-col gap-2">
-                        <label for="playlist-name"
-                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Nombre de la
-                            Playlist</label>
-                        <input type="text" id="playlist-name-2"
-                            onchange="document.getElementById('playlist-name').value = this.value"
-                            class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                            placeholder="Opcional. Por defecto: Setlist...">
+                        <label for="playlist-name" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1" data-i18n="name.label"></label>
+                        <input type="text" id="playlist-name" maxlength="100" data-i18n-placeholder="name.placeholder"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
                     </div>
-
                     <div class="flex-1 flex flex-col gap-2">
-                        <label for="playlist-description"
-                            class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Descripción</label>
-                        <input type="text" id="playlist-description-2"
-                            onchange="document.getElementById('playlist-description').value = this.value"
-                            class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                            placeholder="Opcional. Creada desde setlist">
+                        <label for="playlist-description" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1" data-i18n="desc.label"></label>
+                        <input type="text" id="playlist-description" maxlength="300" data-i18n-placeholder="desc.placeholder"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
                     </div>
                 </div>
-
-                <label class="flex items-center gap-3 cursor-pointer pt-2 w-fit">
-                    <div class="relative inline-flex items-center">
-                        <input type="checkbox" id="playlist-public-2"
-                            onchange="document.getElementById('playlist-public').checked = this.checked"
-                            class="sr-only peer" checked>
-                        <div
-                            class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary">
-                        </div>
-                    </div>
-                    <span class="text-sm font-medium text-slate-700">Playlist Pública</span>
+                <label id="public-toggle" class="flex items-center gap-3 cursor-pointer w-fit">
+                    <span class="relative inline-flex items-center">
+                        <input type="checkbox" id="playlist-public" class="sr-only peer">
+                        <span class="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 transition"></span>
+                        <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition peer-checked:translate-x-5"></span>
+                    </span>
+                    <span class="text-sm font-medium text-slate-700" data-i18n="public.label"></span>
                 </label>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
-                <!-- Search Button -->
-                <button id="search-button"
-                    class="w-full h-14 bg-slate-900 text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-                    <span class="material-symbols-outlined text-xl">search</span>
-                    <span>Buscar Canciones</span>
-                    <span id="search-spinner" class="hidden animate-spin">◒</span>
-                </button>
+            <div id="existing-playlist-fields" class="hidden mt-4 space-y-3">
+                <div class="flex flex-col gap-2">
+                    <label for="existing-playlist" class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1" data-i18n="existing.label"></label>
+                    <select id="existing-playlist"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none">
+                        <option value="" data-i18n="existing.connect"></option>
+                    </select>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer w-fit">
+                    <input type="checkbox" id="skip-existing" class="rounded border-slate-300 text-primary focus:ring-primary/30" checked>
+                    <span data-i18n="existing.skip"></span>
+                </label>
+            </div>
 
-                <!-- Create Playlist Button (Hidden until searched or in manual mode) -->
-                <button id="create-playlist-button"
-                    class="hidden w-full h-14 bg-primary text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-                    <span class="material-symbols-outlined text-xl">playlist_add</span>
-                    <span>Crear Playlist</span>
-                    <span id="create-spinner" class="hidden animate-spin">◒</span>
-                </button>
+            <!-- Modo -->
+            <fieldset class="mt-6">
+                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2" data-i18n="mode.legend"></legend>
+                <div class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-full" role="radiogroup">
+                    <label class="segment"><input type="radio" name="mode" value="review" class="sr-only" checked><span data-i18n="mode.review"></span></label>
+                    <label class="segment"><input type="radio" name="mode" value="auto" class="sr-only"><span data-i18n="mode.auto"></span></label>
+                </div>
+                <p id="mode-help" class="text-xs text-slate-500 mt-2 ml-1"></p>
+            </fieldset>
 
-                <!-- Spotify Connect Link -->
-                <div id="spotify-login-wrapper" class="w-full flex flex-col items-center col-span-1 sm:col-span-2">
-                    <a id="login-spotify-link" href="/login/spotify"
-                        class="w-full h-14 bg-spotify-green text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition-opacity no-underline">
-                        <span class="material-symbols-outlined text-xl">link</span>
-                        <span id="login-spotify-text">Conectar a Spotify</span>
-                    </a>
-                    <p id="facebook-login-warning" class="text-[10px] text-slate-400 mt-2 text-center leading-tight">
-                        Nota: Si instalaste la aplicación (PWA), el inicio de sesión vía <b>Facebook</b> podría ser
-                        revocado por medidas de rastreo de Meta. Te recomendamos iniciar con tu Email de Spotify.
-                    </p>
+            <!-- Versión: original, karaoke o instrumental -->
+            <fieldset class="mt-6">
+                <legend class="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1 mb-2" data-i18n="version.legend"></legend>
+                <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-full" role="radiogroup">
+                    <label class="segment"><input type="radio" name="version" value="original" class="sr-only" checked><span data-i18n="version.original"></span></label>
+                    <label class="segment"><input type="radio" name="version" value="karaoke" class="sr-only"><span data-i18n="version.karaoke"></span></label>
+                    <label class="segment"><input type="radio" name="version" value="instrumental" class="sr-only"><span data-i18n="version.instrumental"></span></label>
+                </div>
+                <p id="version-help" class="hidden text-xs text-slate-500 mt-2 ml-1"></p>
+            </fieldset>
+
+            <div class="mt-6">
+                <button id="search-button" type="button"
+                    class="w-full h-14 bg-slate-900 text-surface font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
+                    <span class="material-symbols-outlined text-xl" aria-hidden="true">search</span>
+                    <span id="search-label"></span>
+                </button>
+                <p id="guest-note" class="hidden text-xs text-slate-500 text-center mt-3 leading-relaxed" data-i18n="guest.note"></p>
+                <div id="login-box" class="hidden flex-col items-center">
+                    <button id="login-button" type="button"
+                        class="w-full h-14 bg-spotify-green text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition">
+                        <span class="material-symbols-outlined text-xl" aria-hidden="true">link</span>
+                        <span data-i18n="login.button"></span>
+                    </button>
+                    <p class="text-[11px] text-slate-400 mt-2 text-center leading-tight" data-i18n-html="login.fbNote"></p>
                 </div>
             </div>
-
-            <div class="flex gap-2 justify-center mt-3">
-                <button id="reset-button"
-                    class="text-xs font-semibold py-1.5 px-3 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition hidden">Reiniciar</button>
-                <button id="copy-report-button"
-                    class="text-xs font-semibold py-1.5 px-3 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition hidden">Copiar
-                    Resumen</button>
-                <button id="download-json-button"
-                    class="text-xs font-semibold py-1.5 px-3 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition hidden">Descargar
-                    JSON</button>
-            </div>
-
         </section>
 
-        <!-- Quick Message Panel -->
-        <div id="results-message" class="text-sm text-center text-slate-600 mt-6 font-medium"></div>
-
-        <!-- Search Results Panel -->
-        <section id="results-panel" class="hidden mt-8">
-            <div id="results-summary" class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">
-            </div>
-            <div id="results-list" class="space-y-3"></div>
-        </section>
-
-        <!-- Panel Para revisar -->
-        <div id="not-found-panel" class="hidden mt-6 bg-orange-50/50 border border-orange-100 rounded-[24px] p-6">
-            <h3 class="font-semibold text-orange-800 mb-3 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd"
-                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                        clip-rule="evenodd" />
-                </svg>
-                Para revisar manualmente
-            </h3>
-            <div id="not-found-list" class="space-y-3 text-sm"></div>
+        <!-- Mensajes y progreso -->
+        <div id="status" class="mt-6 text-sm text-center text-slate-600 font-medium" role="status" aria-live="polite"></div>
+        <div id="progress" class="hidden mt-3 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+            <div id="progress-bar" class="h-full bg-primary transition-all duration-200" style="width:0%"></div>
         </div>
+
+        <!-- Playlist creada -->
+        <section id="done-panel" class="hidden mt-6 bg-green-50 border border-green-200 rounded-xl p-5"></section>
+
+        <!-- Resultados -->
+        <section id="results-panel" class="hidden mt-8">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4 px-1">
+                <div id="results-summary" class="flex flex-wrap gap-2 text-xs font-semibold"></div>
+                <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                    <input type="checkbox" id="only-pending" class="rounded border-slate-300 text-primary focus:ring-primary/30">
+                    <span data-i18n="results.onlyPending"></span>
+                </label>
+            </div>
+            <div class="flex flex-wrap gap-2 mb-4 px-1">
+                <button type="button" data-action="share" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">group</span><span data-i18n="results.share"></span></button>
+                <button type="button" data-action="copy-text" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">content_copy</span><span data-i18n="results.copy"></span></button>
+                <button type="button" data-action="youtube" class="chip-button hidden"><span class="material-symbols-outlined text-base" aria-hidden="true">smart_display</span><span data-i18n="results.youtube"></span></button>
+                <button type="button" data-action="csv" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">download</span><span data-i18n="results.csv"></span></button>
+                <button type="button" data-action="print" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">print</span><span data-i18n="results.print"></span></button>
+                <button type="button" data-action="reset" class="chip-button"><span class="material-symbols-outlined text-base" aria-hidden="true">restart_alt</span><span data-i18n="results.reset"></span></button>
+            </div>
+            <div class="chord-settings mb-4 px-1"></div>
+            <ol id="results-list" class="space-y-3"></ol>
+        </section>
     </main>
 
-    <footer class="text-center pb-8 opacity-60">
-        <p class="text-xs font-semibold text-slate-500">Utiliza la API oficial de Spotify. No estamos afiliados a
-            Spotify.
-        </p>
+    <!-- Barra fija para crear/agregar -->
+    <div id="commit-bar" class="hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div class="max-w-2xl mx-auto flex items-center gap-3">
+            <p id="commit-info" class="flex-1 text-xs text-slate-500"></p>
+            <button id="commit-button" type="button"
+                class="h-12 px-6 bg-primary text-white font-semibold rounded-full flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-50">
+                <span class="material-symbols-outlined text-xl" aria-hidden="true">playlist_add</span>
+                <span id="commit-label"></span>
+            </button>
+        </div>
+    </div>
+
+    <footer class="text-center pb-28 px-4 text-slate-500/80">
+        <a id="support-link" href="#" target="_blank" rel="noopener" class="hidden mb-3 mx-auto w-fit items-center gap-1 rounded-full border border-slate-200 bg-surface px-4 py-2 text-sm font-semibold text-slate-700 no-underline hover:bg-slate-50" data-i18n="footer.support"></a>
+        <p class="text-xs" data-i18n="footer"></p>
+        <p class="text-xs mt-1" data-i18n-html="features.credit"></p>
     </footer>
 
-    <script>
-        const songListTextarea = document.getElementById('song-list');
-        const modeSelect = document.getElementById('mode-select');
-        const playlistNameInput = document.getElementById('playlist-name');
-        const playlistDescriptionInput = document.getElementById('playlist-description');
-        const playlistPublicCheckbox = document.getElementById('playlist-public');
-        const searchButton = document.getElementById('search-button');
-        const createPlaylistButton = document.getElementById('create-playlist-button');
-        const resetButton = document.getElementById('reset-button');
-        const copyReportButton = document.getElementById('copy-report-button');
-        const downloadJsonButton = document.getElementById('download-json-button');
-        const resultsMessage = document.getElementById('results-message');
-        const resultsPanel = document.getElementById('results-panel');
-        const resultsSummary = document.getElementById('results-summary');
-        const resultsList = document.getElementById('results-list');
-        const notFoundPanel = document.getElementById('not-found-panel');
-        const notFoundList = document.getElementById('not-found-list');
+    <!-- Hoja para imprimir (solo visible al imprimir) -->
+    <div id="print-sheet"></div>
 
-        let lastSearchPayload = null;
-        let resolvedChoices = [];
-
-        function ensureCorrectHostForSpotify() {
-            if (window.location.hostname === 'localhost') {
-                window.location.hostname = '127.0.0.1';
-                return false;
-            }
-            return true;
-        }
-
-        function setSearchLoading(loading) {
-            searchButton.disabled = loading;
-            document.getElementById('search-spinner').classList.toggle('hidden', !loading);
-        }
-        function setCreateLoading(loading) {
-            createPlaylistButton.disabled = loading;
-            document.getElementById('create-spinner').classList.toggle('hidden', !loading);
-        }
-
-        function showMessage(text, isError = false) {
-            resultsMessage.innerHTML = text;
-            resultsMessage.className = 'text-sm text-center mb-4 ' + (isError ? 'text-red-600' : 'text-gray-600');
-        }
-
-        function msToDuration(ms) {
-            if (ms == null) return '—';
-            const s = Math.floor(ms / 1000);
-            const m = Math.floor(s / 60);
-            return m + ':' + String(s % 60).padStart(2, '0');
-        }
-
-        function buildResolvedTracks() {
-            if (!lastSearchPayload || !lastSearchPayload.results) return [];
-            const tracks = [];
-            lastSearchPayload.results.forEach((r, i) => {
-                const choice = resolvedChoices[i];
-                if (choice && choice.uri) tracks.push({ uri: choice.uri, rawLine: r.rawLine });
-                else if (r.status === 'found' && r.resolvedUri) tracks.push({ uri: r.resolvedUri, rawLine: r.rawLine });
-            });
-            return tracks;
-        }
-
-        function escapeHtml(s) {
-            if (s == null) return '';
-            const div = document.createElement('div');
-            div.textContent = s;
-            return div.innerHTML;
-        }
-
-        function getAlbumImageUrl(album) {
-            if (!album || !album.images || !album.images.length) return '';
-            var img = album.images.find(function (i) { return i.width >= 64 && i.width <= 300; }) || album.images[album.images.length - 1];
-            return img ? img.url : (album.images[0] && album.images[0].url) || '';
-        }
-
-        function renderResults() {
-            if (!lastSearchPayload) return;
-            const { results, summary, apiErrors } = lastSearchPayload;
-            var paraRevisar = (summary.manual || 0) + (summary.not_found || 0);
-
-            let summaryHtml = 'Líneas: ' + summary.total + ' · Encontradas auto: ' + summary.found + ' · Para revisar: ' + paraRevisar;
-            if (apiErrors && apiErrors.length > 0) {
-                summaryHtml += '<div class="mt-2 text-red-600 bg-red-50 p-2 rounded text-xs font-mono">⚠️ Error(es) de APIs devueltos: ' + escapeHtml(apiErrors.join(' | ')) + '</div>';
-            }
-            resultsSummary.innerHTML = summaryHtml;
-
-            resolvedChoices = results.map((r, i) => {
-                if (resolvedChoices[i] !== undefined) return resolvedChoices[i];
-                if (r.status === 'found' && r.resolvedUri) return { uri: r.resolvedUri };
-                if (r.matches && r.matches[0]) return { uri: r.matches[0].uri };
-                return null;
-            });
-
-            resultsList.innerHTML = '';
-            results.forEach((row, idx) => {
-                const div = document.createElement('div');
-                div.className = 'px-5 py-5 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl transition duration-200 shadow-[0_2px_8px_rgb(0,0,0,0.02)]';
-                const isFound = row.status === 'found';
-                const statusLabel = isFound ? 'Encontrada' : 'Revisar';
-                const statusBadge = isFound ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800';
-                let html = '<div class="flex flex-wrap items-center gap-2 mb-3"><span class="font-mono text-xs text-gray-400">#' + (idx + 1) + '</span><span class="text-gray-800 font-medium">' + escapeHtml(row.rawLine) + '</span><span class="rounded-full px-2.5 py-0.5 text-xs font-medium ' + statusBadge + '">' + statusLabel + '</span>';
-                if (row.bestScore != null) html += '<span class="text-xs text-gray-500">' + row.bestScore + '% coincidencia</span>';
-                html += '</div>';
-
-                var matches = (row.matches || []);
-                var showPicker = !isFound || (isFound && matches.length > 1);
-
-                if (showPicker && matches.length > 0) {
-                    html += '<div class="space-y-2 mt-3">';
-                    matches.forEach((m, j) => {
-                        const t = m.track || {};
-                        const name = t.name || '';
-                        const artist = (t.artists && t.artists[0]) ? t.artists[0].name : '';
-                        const albumName = (t.album && t.album.name) ? t.album.name : '';
-                        const dur = msToDuration(t.duration_ms);
-                        const link = (t.external_urls && t.external_urls.spotify) ? t.external_urls.spotify : '#';
-                        const imgUrl = getAlbumImageUrl(t.album);
-                        const previewUrl = t.preview_url || '';
-                        const isSelected = resolvedChoices[idx] && resolvedChoices[idx].uri === m.uri;
-
-                        // Diseño de fila horizontal limpia (en lugar de grid vertical/largo)
-                        var isHiddenClass = (!isSelected && j >= 5) ? ' hidden extra-option-' + idx : '';
-                        html += '<div class="flex flex-wrap sm:flex-nowrap items-center gap-4 p-3 rounded-2xl border transition duration-200 ' + (isSelected ? 'border-slate-800 bg-slate-50' : 'border-slate-100 hover:border-slate-300 hover:bg-slate-50/50') + isHiddenClass + '">';
-                        if (imgUrl) html += '<img src="' + escapeHtml(imgUrl) + '" alt="" class="w-12 h-12 rounded-lg object-cover shadow-sm flex-shrink-0" loading="lazy">';
-                        else html += '<div class="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center text-slate-400 text-[10px] text-center shadow-sm leading-tight">Sin<br>info</div>';
-
-                        html += '<div class="min-w-0 flex-1 flex flex-col justify-center overflow-hidden">';
-                        html += '<div class="font-semibold text-slate-800 truncate text-sm">' + escapeHtml(name) + '</div>';
-                        html += '<div class="text-[13px] text-slate-500 truncate">' + escapeHtml(artist) + (albumName ? ' &middot; ' + escapeHtml(albumName) : '') + '</div>';
-                        html += '</div>';
-
-                        html += '<div class="w-full sm:w-auto flex items-center gap-3 sm:ml-auto shrink-0 justify-end">';
-
-                        if (previewUrl) {
-                            html += '<audio controls preload="none" src="' + escapeHtml(previewUrl) + '" class="h-7 w-24"></audio>';
-                        }
-
-                        html += '<div class="flex items-center gap-2">';
-                        if (link !== '#') html += '<a href="' + link + '" target="_blank" rel="noopener" class="text-blue-600 text-[13px] font-medium hover:underline flex-shrink-0" title="Ver en Spotify"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>';
-                        html += '<span class="text-[13px] font-medium text-slate-400 min-w-[32px] text-right">' + m.score + '%</span>';
-                        html += '<button type="button" class="choose-track ml-2 px-4 py-1.5 rounded-full text-xs font-semibold transition shrink-0 ' + (isSelected ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/20' : 'bg-slate-100 text-slate-700 hover:bg-slate-200') + '" data-idx="' + idx + '" data-uri="' + escapeHtml(m.uri) + '">' + (isSelected ? 'Elegida' : 'Elegir') + '</button>';
-                        html += '</div>';
-
-                        html += '</div></div>';
-                    });
-                    html += '</div>';
-                    if (matches.length > 5) {
-                        html += '<div class="mt-2 flex justify-center w-full" id="ver-mas-container-' + idx + '"><button type="button" class="text-xs font-semibold px-5 py-2 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 transition drop-shadow-sm" onclick="document.querySelectorAll(\'.extra-option-' + idx + '\').forEach(function(e){e.classList.remove(\'hidden\');}); this.parentElement.remove();">Ver ' + (matches.length - 5) + ' opciones más ↓</button></div>';
-                    }
-                    html += '<div class="mt-3 flex justify-end"><button type="button" class="skip-line px-4 py-2 rounded-full text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition" data-idx="' + idx + '">Omitir canción</button></div>';
-                } else if (matches.length === 0 && !isFound) {
-                    html += '<div class="mt-3 py-3 text-sm text-orange-700 bg-orange-50/50 border border-orange-100 rounded-xl px-4 flex justify-between items-center">';
-                    html += '<span>Sin resultados claros en Spotify. Puedes omitirla.</span>';
-                    html += '<button type="button" class="skip-line px-4 py-1.5 rounded-full text-sm font-medium bg-white border border-orange-200 text-orange-700 hover:bg-orange-100 transition shadow-sm" data-idx="' + idx + '">Omitir</button>';
-                    html += '</div>';
-                } else if (isFound && row.resolvedUri && row.matches && row.matches[0]) {
-                    const t = row.matches[0].track || {};
-                    const link = (t.external_urls && t.external_urls.spotify) ? t.external_urls.spotify : row.resolvedUri;
-                    const imgUrl = getAlbumImageUrl(t.album);
-                    html += '<div class="mt-3 flex items-center gap-3 p-2 rounded-xl border border-green-200 bg-green-50/50 shadow-sm">';
-                    if (imgUrl) html += '<img src="' + escapeHtml(imgUrl) + '" alt="" class="w-10 h-10 rounded-lg object-cover">';
-                    html += '<div><a href="' + link + '" target="_blank" rel="noopener" class="text-green-700 font-medium hover:underline text-sm">' + escapeHtml(t.name || '') + ' – ' + escapeHtml((t.artists && t.artists[0]) ? t.artists[0].name : '') + '</a></div></div>';
-                }
-                div.innerHTML = html;
-                resultsList.appendChild(div);
-            });
-
-            document.querySelectorAll('.choose-track').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    const idx = parseInt(this.getAttribute('data-idx'), 10);
-                    const uri = this.getAttribute('data-uri');
-                    resolvedChoices[idx] = { uri: uri };
-                    renderResults();
-                });
-            });
-            document.querySelectorAll('.skip-line').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    const idx = parseInt(this.getAttribute('data-idx'), 10);
-                    resolvedChoices[idx] = { skip: true };
-                    renderResults();
-                });
-            });
-        }
-
-        async function doSearch(isAutoCreate = false) {
-            if (!ensureCorrectHostForSpotify()) return;
-            const rawText = songListTextarea.value.trim();
-            if (!rawText) {
-                showMessage('Introduce al menos una línea en el setlist.', true);
-                return;
-            }
-            setSearchLoading(true);
-            showMessage('Parseando y buscando en Spotify...');
-            try {
-                const parseRes = await fetch('/api/parse-setlist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ rawText }),
-                });
-                if (!parseRes.ok) throw new Error('Error al parsear');
-                const parseData = await parseRes.json();
-                const items = parseData.items || [];
-                if (items.length === 0) {
-                    showMessage('No se detectaron líneas válidas.', true);
-                    setSearchLoading(false);
-                    return;
-                }
-
-                // === Bypass IP Ban (Búsqueda en el cliente) ===
-                const searchRes = await fetch('/api/search-spotify-client-passthrough', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ items: items, mode: modeSelect.value }),
-                });
-
-                if (searchRes.status === 401) {
-                    const d = await searchRes.json().catch(function () { return {}; });
-                    if (d.loginUrl) { window.location.href = d.loginUrl; return; }
-                }
-
-                const setupData = await searchRes.json();
-                if (!setupData.success) throw new Error(setupData.message || 'Error inicializando proxy-bypass');
-
-                showMessage('Buscando canciones a través de tu celular...');
-                const accessToken = setupData.accessToken;
-                const autoThr = setupData.autoThreshold;
-                const manThr = setupData.manualThreshold;
-
-                let foundCount = 0, manualCount = 0, notFoundCount = 0;
-                let clientResults = [];
-                let clientErrors = [];
-
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    try {
-                        let query = '';
-                        if (item.artist) {
-                            query = 'track:"' + item.title + '" artist:"' + item.artist + '"';
-                        } else {
-                            query = '"' + item.title + '"';
-                        }
-
-                        // Si falla, es fallback suave solo al título
-                        const resp = await fetch('https://api.spotify.com/v1/search?type=track&limit=10&q=' + encodeURIComponent(query), {
-                            headers: { 'Authorization': 'Bearer ' + accessToken }
-                        });
-
-                        if (!resp.ok) {
-                            let rawErrorText = '';
-                            try { rawErrorText = await resp.text(); } catch (e) { rawErrorText = 'NO_TEXT'; }
-                            throw new Error('STATUS ' + resp.status + ' | MSG: ' + rawErrorText.substring(0, 150));
-                        }
-
-                        const data = await resp.json();
-                        let tracks = data.tracks && data.tracks.items ? data.tracks.items : [];
-
-                        // Si no consiguio con queries extractos, intenta crudo global
-                        if (tracks.length === 0 && item.artist) {
-                            const queryB = item.title + ' ' + item.artist;
-                            const respB = await fetch('https://api.spotify.com/v1/search?type=track&limit=10&q=' + encodeURIComponent(queryB), {
-                                headers: { 'Authorization': 'Bearer ' + accessToken }
-                            });
-                            if (respB.ok) {
-                                const dataB = await respB.json();
-                                tracks = dataB.tracks && dataB.tracks.items ? dataB.tracks.items : [];
-                            }
-                        }
-
-                        // Calcular score sencillo de forma local (Client Side match)
-                        // Como no tenemos librería completa de similarity acá, haremos un match básico.
-                        function basicScore(inTit, inArt, trTit, trArt) {
-                            let score = 50;
-                            const t1 = (inTit || '').toLowerCase().trim();
-                            const t2 = (trTit || '').toLowerCase().trim();
-                            if (t1 && t2 && (t1 === t2 || t1.includes(t2) || t2.includes(t1))) score += 20;
-
-                            if (inArt) {
-                                const a1 = inArt.toLowerCase().trim();
-                                const a2 = (trArt || '').toLowerCase().trim();
-                                if (a1 && a2 && (a1 === a2 || a1.includes(a2) || a2.includes(a1))) score += 20;
-                            } else {
-                                score += 20; // Si no dio artista, somos indulgentes
-                            }
-                            // Bonus de exactitud
-                            if (t1 === t2) score += 10;
-                            return Math.min(100, score);
-                        }
-
-                        const matches = tracks.map(tr => {
-                            const trArtist = tr.artists && tr.artists[0] ? tr.artists[0].name : '';
-                            return {
-                                track: {
-                                    id: tr.id, uri: tr.uri, name: tr.name, artists: tr.artists || [],
-                                    album: { name: tr.album ? tr.album.name : '', images: tr.album ? tr.album.images : [] },
-                                    duration_ms: tr.duration_ms, preview_url: tr.preview_url, external_urls: tr.external_urls || {}
-                                },
-                                score: basicScore(item.title, item.artist, tr.name, trArtist),
-                                uri: tr.uri
-                            };
-                        }).sort((a, b) => b.score - a.score);
-
-                        const bestScore = matches.length > 0 ? matches[0].score : null;
-                        let status = 'not_found';
-                        if (bestScore != null) {
-                            if (bestScore >= autoThr) status = 'found';
-                            else if (bestScore >= manThr) status = 'manual';
-                        }
-
-                        if (status === 'found') foundCount++;
-                        else if (status === 'manual') manualCount++;
-                        else notFoundCount++;
-
-                        const resolvedUri = (modeSelect.value === 'auto' && status === 'found') ? matches[0].uri : undefined;
-
-                        clientResults.push({
-                            rawLine: item.rawLine,
-                            title: item.title,
-                            artist: item.artist,
-                            matches: matches,
-                            bestScore: bestScore,
-                            status: status,
-                            resolvedUri: resolvedUri || null
-                        });
-
-                    } catch (errItem) {
-                        console.error('Fetch C-Side falló para', item.title, errItem);
-                        clientErrors.push(errItem.message);
-                        notFoundCount++;
-                        clientResults.push({ rawLine: item.rawLine, title: item.title, artist: item.artist, matches: [], bestScore: null, status: 'not_found', resolvedUri: null });
-                    }
-                    await new Promise(r => setTimeout(r, 60)); // Ratelimit protection local
-                }
-
-                lastSearchPayload = {
-                    results: clientResults,
-                    summary: { total: items.length, found: foundCount, manual: manualCount, not_found: notFoundCount },
-                    apiErrors: [...new Set(clientErrors)]
-                };
-                // === Fin Bypass IP Ban ===
-
-                resolvedChoices = [];
-                renderResults();
-
-                if (!isAutoCreate) {
-                    resultsPanel.classList.remove('hidden');
-                    createPlaylistButton.classList.remove('hidden');
-                }
-                resetButton.classList.remove('hidden');
-                copyReportButton.classList.remove('hidden');
-                downloadJsonButton.classList.remove('hidden');
-
-                const s = lastSearchPayload.summary;
-                if (!isAutoCreate) {
-                    var paraRevisar = (s.manual || 0) + (s.not_found || 0);
-                    if (paraRevisar > 0) {
-                        notFoundPanel.classList.remove('hidden');
-                        notFoundPanel.querySelector('h3').textContent = 'Para revisar (' + paraRevisar + ')';
-                        notFoundList.innerHTML = lastSearchPayload.results
-                            .filter(function (r) { return r.status !== 'found'; })
-                            .map(function (r) {
-                                var score = r.bestScore != null ? r.bestScore + '%' : (r.matches && r.matches.length ? 'ver opciones' : 'sin resultados');
-                                return '<div class="flex justify-between gap-2"><span class="text-amber-800">' + escapeHtml(r.rawLine) + '</span><span class="text-amber-600 text-sm">' + score + '</span></div>';
-                            })
-                            .join('');
-                    } else {
-                        notFoundPanel.classList.add('hidden');
-                    }
-                }
-
-                if (isAutoCreate) {
-                    // Start automatic playlist creation in background
-                    await doCreatePlaylist();
-                } else {
-                    var rev = (s.manual || 0) + (s.not_found || 0);
-                    showMessage('Se detectaron ' + s.total + ' líneas. ' + s.found + ' encontradas automáticamente, ' + rev + ' para revisar (elige la opción correcta).');
-                }
-            } catch (e) {
-                showMessage(e.message || 'Error de red.', true);
-            }
-            setSearchLoading(false);
-        }
-
-        async function doCreatePlaylist() {
-            const tracks = buildResolvedTracks();
-            if (tracks.length === 0) {
-                showMessage('No hay canciones seleccionadas para la playlist.', true);
-                return;
-            }
-            if (!ensureCorrectHostForSpotify()) return;
-            setCreateLoading(true);
-            showMessage('Creando playlist...');
-            try {
-                const res = await fetch('/api/create-playlist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        resolvedTracks: tracks,
-                        playlistName: playlistNameInput.value.trim() || undefined,
-                        description: playlistDescriptionInput.value.trim() || undefined,
-                        public: playlistPublicCheckbox.checked,
-                    }),
-                });
-                if (res.status === 401) {
-                    const d = await res.json().catch(function () { return {}; });
-                    if (d.loginUrl) { window.location.href = d.loginUrl; return; }
-                }
-                if (!res.ok) {
-                    const err = await res.json().catch(function () { return {}; });
-                    throw new Error(err.message || 'Error al crear');
-                }
-                const data = await res.json();
-                showMessage('Playlist creada. <a href="' + data.playlistUrl + '" target="_blank" rel="noopener" class="text-green-600 hover:underline">Abrir en Spotify</a>');
-            } catch (e) {
-                showMessage(e.message || 'Error.', true);
-            }
-            setCreateLoading(false);
-        }
-
-        function doReset() {
-            lastSearchPayload = null;
-            resolvedChoices = [];
-            resultsPanel.classList.add('hidden');
-            notFoundPanel.classList.add('hidden');
-            createPlaylistButton.classList.add('hidden');
-            resetButton.classList.add('hidden');
-            copyReportButton.classList.add('hidden');
-            downloadJsonButton.classList.add('hidden');
-            showMessage('');
-        }
-
-        function doCopyReport() {
-            if (!lastSearchPayload) return;
-            const s = lastSearchPayload.summary;
-            var rev = (s.manual || 0) + (s.not_found || 0);
-            const text = 'Setlist: ' + s.total + ' líneas | Encontradas auto: ' + s.found + ' | Para revisar: ' + rev;
-            navigator.clipboard.writeText(text).then(function () { showMessage('Resumen copiado al portapapeles.'); });
-        }
-
-        function doDownloadJson() {
-            if (!lastSearchPayload) return;
-            const blob = new Blob([JSON.stringify(lastSearchPayload, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'setlist-results.json';
-            a.click();
-            URL.revokeObjectURL(a.href);
-            showMessage('JSON descargado.');
-        }
-
-
-
-        searchButton.addEventListener('click', function () {
-            doSearch(modeSelect.value === 'auto');
-        });
-
-        modeSelect.addEventListener('change', function () {
-            var searchSpan = searchButton.querySelector('span:nth-child(2)');
-            if (modeSelect.value === 'auto') {
-                searchSpan.textContent = 'Crear playlist auto.';
-                searchButton.title = 'Busca y crea la playlist enseguida con las mejores coincidencias';
-                if (!resultsPanel.classList.contains('hidden')) {
-                    createPlaylistButton.classList.add('hidden'); // Hide creating manually if auto mode is selected
-                }
-            } else {
-                searchSpan.textContent = 'Buscar Canciones';
-                searchButton.title = 'Buscar canciones en Spotify para revisar antes de crear';
-                if (!resultsPanel.classList.contains('hidden')) {
-                    createPlaylistButton.classList.remove('hidden');
-                }
-            }
-        });
-        modeSelect.dispatchEvent(new Event('change'));
-        createPlaylistButton.addEventListener('click', doCreatePlaylist);
-        resetButton.addEventListener('click', doReset);
-        copyReportButton.addEventListener('click', doCopyReport);
-        downloadJsonButton.addEventListener('click', doDownloadJson);
-
-        // Navegación normal a Spotify (sin preventDefault para evitar interferencias)
-        document.getElementById('login-spotify-link').addEventListener('click', function () {
-            showMessage('Redirigiendo a Spotify...', false);
-        });
-
-        window.addEventListener('DOMContentLoaded', function () {
-            const saved = localStorage.getItem('playlistFormSongs');
-            if (saved) songListTextarea.value = saved;
-            const savedName = localStorage.getItem('playlistFormName');
-            if (savedName) playlistNameInput.value = savedName;
-
-            // Verificar sesión primero, luego decidir si redirigir
-            fetch('/api/spotify-status', { credentials: 'include' })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    // Solo redirigir a 127.0.0.1 si estamos en localhost y NO hay sesión
-                    if (window.location.hostname === 'localhost' && !data.loggedIn) {
-                        var url = 'http://127.0.0.1:' + (window.location.port || '80') + window.location.pathname + window.location.search;
-                        window.location.replace(url);
-                        return;
-                    }
-
-                    // Actualizar UI según estado de sesión
-                    var link = document.getElementById('login-spotify-link');
-                    var text = document.getElementById('login-spotify-text');
-                    var wrapper = document.getElementById('spotify-login-wrapper');
-                    var fbWarning = document.getElementById('facebook-login-warning');
-                    var geminiContainer = document.getElementById('gemini-upload-container');
-
-                    if (!link || !text || !wrapper) return;
-
-                    var existingAgain = document.getElementById('spotify-login-again');
-                    if (existingAgain) existingAgain.remove();
-
-                    if (data.loggedIn) {
-                        link.classList.replace('bg-spotify-green', 'bg-slate-100');
-                        link.classList.replace('text-white', 'text-slate-600');
-                        text.textContent = 'Conectado';
-                        link.removeAttribute('href');
-                        link.style.pointerEvents = 'none';
-                        if (fbWarning) fbWarning.classList.add('hidden');
-                        if (geminiContainer) {
-                            geminiContainer.classList.remove('hidden');
-                            geminiContainer.classList.add('flex');
-                        }
-
-                        var again = document.createElement('a');
-                        again.id = 'spotify-login-again';
-                        again.href = '/login/spotify';
-                        again.className = 'text-sm text-green-700 font-medium hover:text-green-800 underline mt-2';
-                        again.textContent = 'Conectar de nuevo';
-                        wrapper.appendChild(again);
-                    } else {
-                        text.textContent = 'Conectar con Spotify';
-                        link.classList.remove('opacity-90');
-                        if (geminiContainer) {
-                            geminiContainer.classList.add('hidden');
-                            geminiContainer.classList.remove('flex');
-                        }
-                    }
-                })
-                .catch(function () {
-                    // Si hay error, igual intentar redirigir si es localhost
-                    if (window.location.hostname === 'localhost') {
-                        var url = 'http://127.0.0.1:' + (window.location.port || '80') + window.location.pathname + window.location.search;
-                        window.location.replace(url);
-                    }
-                });
-        });
-        songListTextarea.addEventListener('blur', function () { localStorage.setItem('playlistFormSongs', songListTextarea.value); });
-        playlistNameInput.addEventListener('blur', function () { localStorage.setItem('playlistFormName', playlistNameInput.value); });
-
-        var imageInput = document.getElementById('image-input');
-        var extractImageButton = document.getElementById('extract-image-button');
-        var extractImageSpinner = document.getElementById('extract-image-spinner');
-        imageInput.addEventListener('change', function () { extractImageButton.disabled = !imageInput.files || imageInput.files.length === 0; });
-        extractImageButton.addEventListener('click', function () {
-            if (!imageInput.files || !imageInput.files[0]) return;
-            extractImageButton.disabled = true;
-            extractImageSpinner.classList.remove('hidden');
-            var formData = new FormData();
-            formData.append('image', imageInput.files[0]);
-            fetch('/api/extract-setlist-from-image', { method: 'POST', credentials: 'include', body: formData })
-                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-                .then(function (o) {
-                    extractImageButton.disabled = false;
-                    extractImageSpinner.classList.add('hidden');
-                    if (o.ok && o.data.items && o.data.items.length) {
-                        var lines = o.data.items.map(function (it) {
-                            if (it.title && it.artist) return it.title + ' - ' + it.artist;
-                            if (it.rawLine) return it.rawLine;
-                            return it.title || it.artist || '';
-                        }).filter(Boolean);
-                        songListTextarea.value = lines.join('\n');
-                        showMessage('Se extrajeron ' + lines.length + ' líneas. Revisa y pulsa Buscar.');
-                    } else {
-                        showMessage(o.data.message || 'No se pudieron extraer líneas.', true);
-                    }
-                })
-                .catch(function () {
-                    extractImageButton.disabled = false;
-                    extractImageSpinner.classList.add('hidden');
-                    showMessage('Error al procesar la imagen.', true);
-                });
-        });
-
-        // Registrar Service Worker para PWA
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function () {
-                navigator.serviceWorker.register('/sw.js').then(function (registration) {
-                    console.log('ServiceWorker registration successful');
-                }, function (err) {
-                    console.log('ServiceWorker registration failed: ', err);
-                });
-            });
-        }
-    </script>
+    <script type="module" src="/js/app.js"></script>
 </body>
 
 </html>

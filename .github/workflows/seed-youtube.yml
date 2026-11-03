@@ -1,0 +1,35 @@
+# Cada noche usa las búsquedas de YouTube que sobraron del día para precargar
+# canciones famosas en la caché de SetSnap. Configura en el repo
+# (Settings → Secrets and variables → Actions):
+#   SETSNAP_URL        p. ej. https://setsnap.pages.dev
+#   SETSNAP_ADMIN_KEY  el mismo valor que ADMIN_KEY en Cloudflare
+name: Precargar caché de YouTube
+
+on:
+  schedule:
+    # 06:30 UTC ≈ 23:30 en el Pacífico: justo antes de que Google reinicie la cuota.
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    if: ${{ vars.SEED_ENABLED != 'false' }}
+    steps:
+      - name: Procesar bloques mientras quede cuota
+        env:
+          URL: ${{ secrets.SETSNAP_URL }}
+          KEY: ${{ secrets.SETSNAP_ADMIN_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "Faltan los secrets SETSNAP_URL o SETSNAP_ADMIN_KEY; nada que hacer."
+            exit 0
+          fi
+          for i in $(seq 1 20); do
+            out=$(curl -sS -X POST "$URL/api/admin/seed" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{}')
+            echo "$out"
+            echo "$out" | grep -q '"processed":0' && break
+            echo "$out" | grep -q '"done":true' && break
+            echo "$out" | grep -q '"success":false' && break
+            sleep 2
+          done
